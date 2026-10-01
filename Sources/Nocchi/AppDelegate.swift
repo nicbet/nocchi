@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             demo = MockScenario.all.first { $0.name == name } ?? .showcase
         }
         do { try hookServer.start() } catch { NSLog("nocchi: hook socket unavailable: \(error)") }
+        refreshHookBinary()
         startSource()
         claudeActivity.start()
         let notch = NotchController(store: store)
@@ -57,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             tip: "On screens without a notch, show messages like “Nocchi finished” between the faces."))
         menu.addItem(.separator())
         menu.addItem(sourcesMenuItem())
+        menu.addItem(hooksMenuItem)
         menu.addItem(screenMenuItem)
         menu.addItem(toggle("Ignore Reduce Motion", \.ignoresReduceMotion,
                             tip: "Animate nocchi fully even when Reduce Motion is on in System Settings."))
@@ -74,6 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         connectionItem.title = connectionDescription
+        for item in hooksMenuItem.submenu?.items ?? [] {
+            if let agent = (item.representedObject as? String).flatMap(HookInstaller.Agent.init(rawValue:)) {
+                item.state = HookInstaller.isInstalled(agent) ? .on : .off
+            }
+        }
         launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         rebuildScreenMenu()
     }
@@ -238,6 +245,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NocchiSettings.shared[keyPath: setting].toggle()
         sender.state = NocchiSettings.shared[keyPath: setting] ? .on : .off
         startSource()
+    }
+
+    // MARK: Hooks
+
+    /// Claude Code and Codex hooks: optional. Claude works without them (its session list reports
+    /// everything); Codex needs them for "needs you". Both get instant updates from them.
+    private lazy var hooksMenuItem: NSMenuItem = {
+        let menu = NSMenu()
+        for agent in HookInstaller.Agent.allCases {
+            let item = menu.addItem(withTitle: agent.title, action: #selector(toggleHooks(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = agent.rawValue
+            item.toolTip = agent == .codex
+                ? "Lets nocchi see when Codex asks for permission, and react instantly. Optional."
+                : "Instant updates and failure reasons. Optional: nocchi already sees Claude sessions without hooks."
+        }
+        let item = NSMenuItem(title: "Hooks", action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
+    }()
+
+    /// The `nocchi-hook` inside this app, to copy where hooks call it.
+    private var bundledHook: URL? {
+        Bundle.main.url(forAuxiliaryExecutable: "nocchi-hook")
+            ?? Bundle.main.executableURL?.deletingLastPathComponent().appending(path: "nocchi-hook")
+    }
+
+    /// Keeps the installed hook binary in step with this version of the app.
+    private func refreshHookBinary() {
+        guard let bundledHook, HookInstaller.Agent.allCases.contains(where: { HookInstaller.isInstalled($0) }) else { return }
+        try? HookInstaller.updateBinary(from: bundledHook, to: HookInstaller.hookBinary())
+    }
+
+    @objc private func toggleHooks(_ sender: NSMenuItem) {
+        guard let agent = (sender.representedObject as? String).flatMap(HookInstaller.Agent.init(rawValue:)) else { return }
+        let installed = HookInstaller.isInstalled(agent)
+        let file = (agent.settingsFile().path as NSString).abbreviatingWithTildeInPath
+        let alert = NSAlert()
+        if installed {
+            alert.messageText = "Remove nocchi's \(agent.title) hooks?"
+            alert.informativeText = "nocchi removes only its own entries from \(file) (a backup is made first)."
+            alert.addButton(withTitle: "Remove")
+        } else {
+            alert.messageText = "Install nocchi's \(agent.title) hooks?"
+            var text = "nocchi adds its entries to \(file), next to any hooks you have (a backup is made first). "
+            text += agent == .codex
+                ? "It also turns on hooks in ~/.codex/config.toml. Codex may ask you to trust the new hook; restart running Codex sessions to pick it up."
+                : "Restart running Claude sessions to pick them up."
+            alert.informativeText = text
+            alert.addButton(withTitle: "Install")
+        }
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            if installed {
+                try HookInstaller.uninstall(agent)
+            } else {
+                guard let bundledHook else { throw CocoaError(.fileNoSuchFile) }
+                try HookInstaller.install(agent, bundledBinary: bundledHook)
+            }
+            sender.state = HookInstaller.isInstalled(agent) ? .on : .off
+        } catch {
+            let failure = NSAlert(error: error)
+            failure.messageText = "Couldn't change the \(agent.title) hooks"
+            failure.runModal()
+        }
     }
 
     // MARK: Demo
