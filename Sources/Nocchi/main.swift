@@ -5,7 +5,8 @@ import NocchiHerdr
 import NocchiUI
 
 // Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
-// renders what the real Herdr reports instead of the preview scenarios.
+// renders what the real Herdr reports instead of the preview scenarios; `--live --source claude`
+// renders what Claude's own session registry reports.
 if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
     let dir = CommandLine.arguments.dropFirst(flag + 1).first ?? "."
     let live = CommandLine.arguments.contains("--live")
@@ -26,7 +27,12 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
         guard live else { finish { try NotchSnapshot.write(to: URL(fileURLWithPath: dir), geometry: geometry) } }
         let store = AgentStore()
         let settings = NocchiSettings.shared
-        store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        // `--source claude` sees Claude sessions natively (including Herdr's), to check the adapter.
+        if CommandLine.arguments.contains("claude") {
+            store.run(ClaudeAdapter(leavesHerdrToHerdr: false))
+        } else {
+            store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        }
         let activity = ClaudeActivityFeed(store: store)
         activity.start()
         Task { @MainActor in

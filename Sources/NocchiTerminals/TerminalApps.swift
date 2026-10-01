@@ -106,3 +106,26 @@ private final class FrontmostWatcher {
         continuation.yield(frontmost)
     }
 }
+
+extension TerminalApps {
+    /// The frontmost app's pid: now, then on every change.
+    public static func frontmostAppUpdates() -> AsyncStream<pid_t> {
+        let (stream, continuation) = AsyncStream.makeStream(of: pid_t.self, bufferingPolicy: .bufferingNewest(4))
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { continuation.yield(pid) }
+        let observer = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            if let pid = app?.processIdentifier { continuation.yield(pid) }
+        }
+        let token = UncheckedBox(observer)
+        continuation.onTermination = { _ in NSWorkspace.shared.notificationCenter.removeObserver(token.value) }
+        return stream
+    }
+}
+
+/// Carries a value the compiler can't prove `Sendable` (a notification observer token) across.
+private struct UncheckedBox<T>: @unchecked Sendable {
+    let value: T
+    init(_ value: T) { self.value = value }
+}
