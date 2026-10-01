@@ -55,6 +55,19 @@ public struct ProcessTable: Sendable {
 
     public subscript(pid: pid_t) -> Entry? { entries[pid] }
 
+    /// App bundles named in `chain`'s command lines (`/Applications/iTerm.app`), nearest first.
+    /// Paths without spaces only: apps with spaces in their names keep their shells as children,
+    /// so their chain reaches them anyway.
+    public static func appBundles(in chain: [Entry]) -> [String] {
+        var bundles: [String] = []
+        for entry in chain {
+            for match in entry.args.matches(of: /(\/[^\s]+?\.app)(?=\/|\s|$)/) where !bundles.contains(String(match.1)) {
+                bundles.append(String(match.1))
+            }
+        }
+        return bundles
+    }
+
     /// `pid`'s parent, grandparent and so on, nearest first (at most 64).
     public func ancestors(of pid: pid_t) -> [Entry] {
         var chain: [Entry] = []

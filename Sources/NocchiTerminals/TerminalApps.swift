@@ -9,11 +9,20 @@ public enum TerminalApps {
 
     /// The first regular app up `pid`'s parent chain; nil inside tmux or over SSH, where the chain
     /// doesn't reach a local app.
+    ///
+    /// Some terminals run their shells under a separate daemon whose parent is `launchd`, so the
+    /// chain never reaches the app (iTerm: `login … /Applications/iTerm.app/…/ShellLauncher` under
+    /// `iTermServer`). Then an app bundle named in the chain's command lines identifies it.
     public static func host(of pid: pid_t, in table: ProcessTable) -> NSRunningApplication? {
-        for entry in [table[pid]].compactMap({ $0 }) + table.ancestors(of: pid) {
+        let chain = [table[pid]].compactMap({ $0 }) + table.ancestors(of: pid)
+        for entry in chain {
             if let app = NSRunningApplication(processIdentifier: entry.pid), app.activationPolicy == .regular { return app }
         }
-        return nil
+        let bundles = ProcessTable.appBundles(in: chain)
+        guard !bundles.isEmpty else { return nil }
+        return NSWorkspace.shared.runningApplications.first { app in
+            app.activationPolicy == .regular && app.bundleURL.map { bundles.contains($0.standardizedFileURL.path) } == true
+        }
     }
 
     /// Brings `app` to the front.

@@ -26,3 +26,25 @@ import Testing
         #expect(table.ancestors(of: 9999).isEmpty)
     }
 }
+
+@Suite struct AppBundleTests {
+    @Test func findsAppBundlesInCommandLines() {
+        // iTerm: the shell's chain ends at a daemon under launchd, but login names the app.
+        let table = ProcessTable.parse("""
+            46336     1 ??       /Users/me/Library/Application Support/iTerm2/iTermServer-3.6.11 /Users/me/Library/Application Support/iTerm2/iterm2-daemon-1.socket
+            62651 46336 ttys120  /usr/bin/login -fpl me /Applications/iTerm.app/Contents/MacOS/ShellLauncher --launch_shell
+            62652 62651 ttys120  -zsh
+            62700 62652 ttys120  claude
+        """)
+        let chain = [table[62700]!] + table.ancestors(of: 62700)
+        #expect(ProcessTable.appBundles(in: chain) == ["/Applications/iTerm.app"])
+    }
+
+    @Test func noBundleNoGuess() {
+        let table = ProcessTable.parse("""
+            10     1 ttys001  tmux new -s work
+            11    10 ttys002  claude
+        """)
+        #expect(ProcessTable.appBundles(in: [table[11]!] + table.ancestors(of: 11)).isEmpty)
+    }
+}
