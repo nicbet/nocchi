@@ -45,6 +45,6 @@ public enum FacePalette {
     static let ring = RGBA(0.99, 0.76, 0.30)
     /// Dark so it reads on every body color, including the blue working face.
     static let badge = RGBA(0.13, 0.14, 0.17)
-    static let errorDot = RGBA(1.0, 0.62, 0.60)
+    static let errorDot = RGBA(0.72, 0.04, 0.08)  // deep red
     static let sparkle = RGBA(1.0, 0.94, 0.66)
 }

@@ -52,13 +52,15 @@ enum FaceRenderer {
         drawEyes(cg, s: s, p: p, gaze: gaze)
 
         if p.errorDot > 0.01 {
-            // Light with a dark outline so it stays visible on the red body.
-            let d = 0.2 * s
-            let dot = CGRect(x: -0.62 * r - d / 2, y: -0.62 * r - d / 2, width: d, height: d)
-            cg.setFillColor(RGBA.black.opacity(p.errorDot * 0.85).cgColor)
-            cg.fillEllipse(in: dot.insetBy(dx: -0.03 * s, dy: -0.03 * s))
+            // Deep red dot sitting on the rim at the top-left, with a soft glow instead of an outline.
+            let d = 0.17 * s
+            let c = CGPoint(x: -0.67 * r, y: -0.67 * r)  // on the rim at -135°
+            let dot = CGRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+            cg.saveGState()
+            cg.setShadow(offset: .zero, blur: 0.1 * s, color: FacePalette.errorDot.opacity(0.8 * p.errorDot).cgColor)
             cg.setFillColor(FacePalette.errorDot.opacity(p.errorDot).cgColor)
             cg.fillEllipse(in: dot)
+            cg.restoreGState()
         }
         if p.badge > 0.01 { drawBadge(cg, r: r, opacity: p.badge, t: t) }
         if p.sparkles > 0.01 { drawSparkles(cg, r: r, opacity: p.sparkles, t: t) }
