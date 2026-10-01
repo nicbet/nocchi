@@ -27,7 +27,7 @@ let package = Package(
         // HerdrAdapter: Herdr socket client and event stream.
         .target(name: "NocchiHerdr", dependencies: ["NocchiCore", "NocchiTerminals"]),
         // What Claude Code agents are doing, read from their session transcripts.
-        .target(name: "NocchiClaude", dependencies: ["NocchiCore"]),
+        .target(name: "NocchiClaude", dependencies: ["NocchiCore", "NocchiHooks", "NocchiHookProtocol", "NocchiTerminals"]),
         // NotchKit, Mascot and views.
         .target(name: "NocchiUI", dependencies: ["NocchiCore"]),
 
