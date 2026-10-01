@@ -37,11 +37,36 @@ public final class NotchModel {
     /// The launch greeting is showing.
     public var isGreeting = false
     public var drop: DropState = .none
+    /// Writing a message to an agent from the notch.
+    public var prompt: PromptState = .none {
+        didSet { if prompt != oldValue { onPromptChange?(prompt) } }
+    }
+    @ObservationIgnored var onPromptChange: ((PromptState) -> Void)?
     /// Called with the folder when one is dropped on the notch.
     @ObservationIgnored var onDropFolder: ((URL) -> Void)?
 
     /// Stay open regardless of hover.
-    var holdsOpen: Bool { isPinned || drop != .none }
+    var holdsOpen: Bool { isPinned || drop != .none || prompt != .none }
+
+    /// Sends `text` to the agent being written to. On failure the message stays a few seconds.
+    func sendPrompt(_ text: String) {
+        guard case .composing(let ref) = prompt else { return }
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        prompt = .sending(ref)
+        Task {
+            do {
+                try await store.perform(.prompt(ref, text))
+                if prompt == .sending(ref) { prompt = .none }
+            } catch {
+                let message = if case AgentActionError.failed(let why) = error { why } else { "\(error)" }
+                guard prompt == .sending(ref) else { return }
+                prompt = .failed(ref, message: message)
+                try? await Task.sleep(for: .seconds(4))
+                if prompt == .failed(ref, message: message) { prompt = .composing(ref) }
+            }
+        }
+    }
 
     /// Faces stop animating while the displays sleep. (Window occlusion isn't used: for a
     /// transparent, always-on-top panel it can report "not visible" while the notch is on screen.)
@@ -121,5 +146,20 @@ public enum DropState: Equatable, Sendable {
     /// The bar's position while an agent starts: eases toward 90 % and waits there for Herdr.
     static func progress(after seconds: TimeInterval) -> Double {
         0.9 * (1 - exp(-max(0, seconds) / 2.5))
+    }
+}
+
+public enum PromptState: Equatable, Sendable {
+    case none
+    case composing(AgentRef)
+    case sending(AgentRef)
+    case failed(AgentRef, message: String)
+
+    /// The agent being written to.
+    var target: AgentRef? {
+        switch self {
+        case .none: nil
+        case .composing(let ref), .sending(let ref), .failed(let ref, _): ref
+        }
     }
 }

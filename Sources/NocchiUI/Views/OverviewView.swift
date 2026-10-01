@@ -11,7 +11,8 @@ struct OverviewView: View {
     var body: some View {
         let body = model.bodySize(for: .expanded)
         let store = model.store
-        let alert = store.primary.flatMap { entry in
+        // While writing to an agent, keep its card: an alert would pull the field away.
+        let alert = model.prompt != .none ? nil : store.primary.flatMap { entry in
             Self.alertMoods.contains(store.mood(of: entry)) ? entry : nil
         }
         VStack(spacing: 0) {
@@ -22,7 +23,7 @@ struct OverviewView: View {
                         .transition(.blurReplace)
                 } else {
                     HStack(spacing: 10) {
-                        FocusCard(store: store)
+                        FocusCard(model: model)
                             .frame(width: (body.width - 36 - 10) * 0.52)
                         ChipsCard(store: store)
                     }
@@ -48,40 +49,125 @@ extension OverviewView {
     static var focusFaceSize: CGFloat { FocusCard.faceSize }
 }
 
-/// The primary agent: big face with a glow in its mood color, and what it's doing.
+/// The primary agent (or the one being written to): big face with a glow in its mood color, and
+/// what it's doing. Click it to open the agent; the bubble button writes to it.
 private struct FocusCard: View {
-    let store: AgentStore
+    let model: NotchModel
     static let padding: CGFloat = 14
     static let faceSize: CGFloat = 64
     static let faceFrame: CGFloat = 92
 
     var body: some View {
-        let primary = store.primary
-        let mood = primary.map(store.mood(of:)) ?? store.emptyMood
+        let store = model.store
+        let entry = model.prompt.target.flatMap { store.state.agents[$0] } ?? store.primary
+        let mood = entry.map(store.mood(of:)) ?? store.emptyMood
+        let composing = entry != nil && model.prompt.target == entry?.ref
         HStack(spacing: 14) {
-            FaceView(mood: mood, size: Self.faceSize, seed: primary?.faceSeed ?? 0.37)
-                .frame(width: Self.faceFrame, height: Self.faceFrame)
-                .background {
-                    RadialGradient(colors: [mood.tint.opacity(0.45), .clear], center: .center, startRadius: 10, endRadius: 70)
-                        .frame(width: 150, height: 150)
-                        .animation(.easeInOut(duration: 0.4), value: mood)
+            HStack(spacing: 14) {
+                FaceView(mood: mood, size: Self.faceSize, seed: entry?.faceSeed ?? 0.37)
+                    .frame(width: Self.faceFrame, height: Self.faceFrame)
+                    .background {
+                        RadialGradient(colors: [mood.tint.opacity(0.45), .clear], center: .center, startRadius: 10, endRadius: 70)
+                            .frame(width: 150, height: 150)
+                            .animation(.easeInOut(duration: 0.4), value: mood)
+                    }
+                if let entry, composing {
+                    PromptField(model: model, entry: entry)
+                } else if let entry {
+                    StepCarousel(entry: entry, mood: mood)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(store.unavailableReason ?? "No agents running").font(.system(size: 14, weight: .semibold))
+                        Text(store.unavailableReason != nil ? "Start it and your agents show up here."
+                            : mood == .sleep ? "Waiting for an agent source…" : "Start an agent and it shows up here.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                 }
-            if let primary {
-                StepCarousel(entry: primary, mood: mood)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(store.unavailableReason ?? "No agents running").font(.system(size: 14, weight: .semibold))
-                    Text(store.unavailableReason != nil ? "Start it and your agents show up here."
-                        : mood == .sleep ? "Waiting for an agent source…" : "Start an agent and it shows up here.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .focusesAgent(composing ? nil : entry, in: store)
+            if let entry, !composing, store.capabilities(of: entry.ref).contains(.prompt) {
+                MessageButton(model: model, entry: entry, blocked: entry.info.status == .blocked)
+            }
         }
         .padding(.horizontal, Self.padding)
         .frame(maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
-        .focusesAgent(primary, in: store)
+    }
+}
+
+private struct MessageButton: View {
+    let model: NotchModel
+    let entry: AgentEntry
+    let blocked: Bool
+
+    var body: some View {
+        Button {
+            model.prompt = .composing(entry.ref)
+        } label: {
+            Image(systemName: "text.bubble")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(.white.opacity(0.1)))
+        }
+        .buttonStyle(PressScale())
+        .disabled(blocked)
+        .opacity(blocked ? 0.35 : 1)
+        .help(blocked ? "\(entry.info.displayName) is waiting for you: answer it in the terminal" : "Message \(entry.info.displayName)")
+    }
+}
+
+/// Write to an agent: Return sends, Escape cancels.
+private struct PromptField: View {
+    let model: NotchModel
+    let entry: AgentEntry
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Message \(entry.info.displayName)")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.45))
+            HStack(spacing: 8) {
+                TextField("What next?", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium))
+                    .focused($focused)
+                    .onSubmit { model.sendPrompt(text) }
+                    .onExitCommand { model.prompt = .none }
+                    .disabled(model.prompt == .sending(entry.ref))
+                Button {
+                    model.sendPrompt(text)
+                } label: {
+                    Image(systemName: model.prompt == .sending(entry.ref) ? "ellipsis.circle.fill" : "arrow.up.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(text.isEmpty ? .white.opacity(0.25) : Mood.working.tint)
+                }
+                .buttonStyle(.plain)
+                .disabled(text.isEmpty)
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .frame(height: 34)
+            .background(Capsule().fill(.white.opacity(0.1)))
+            if case .failed(_, let message) = model.prompt {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(FacePalette.body(for: .error).lighter(0.2).color)
+                    .lineLimit(1)
+            } else {
+                Button("Cancel") { model.prompt = .none }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .task {
+            // The panel becomes key as composing starts; focus once it has.
+            try? await Task.sleep(for: .milliseconds(60))
+            focused = true
+        }
     }
 }
 

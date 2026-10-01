@@ -37,6 +37,13 @@ public enum NotchSnapshot {
             model.drop = drop
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-drop-\(name).png")))
         }
+        // Writing to the primary agent.
+        do {
+            let store = previewStore(.showcase)
+            let model = NotchModel(geometry: geometry, store: store)
+            if let primary = store.primary { model.prompt = .composing(primary.ref) }
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
+        }
         // More agents than spots: the overflow badge and chip.
         for mode in [NotchMode.collapsed, .expanded] {
             urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,

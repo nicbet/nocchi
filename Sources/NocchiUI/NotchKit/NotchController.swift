@@ -48,6 +48,7 @@ public final class NotchController {
         if greeting { greet() }
         observeMoods()
         model.onDropFolder = { [weak self] url in self?.startAgent(in: url) }
+        model.onPromptChange = { [weak self] state in self?.promptChanged(state) }
         // A file drag can't be seen directly from outside the dragging app, so on every press we
         // watch the drag pasteboard until the button is released.
         mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
@@ -58,6 +59,10 @@ public final class NotchController {
             MainActor.assumeIsolated { self?.trackMouse() }
         }
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { $0.screensChanged() }
+        // Clicking elsewhere while writing to an agent closes the field.
+        observe(NotificationCenter.default, NSWindow.didResignKeyNotification, object: panel) { controller in
+            if case .composing = controller.model.prompt { controller.model.prompt = .none }
+        }
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.model.screensAsleep = true }
         observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.model.screensAsleep = false }
@@ -128,6 +133,22 @@ public final class NotchController {
             guard let self else { return }
             model.isGreeting = false
             if !model.isHovering && !model.holdsOpen { setMode(.collapsed) }
+        }
+    }
+
+    // MARK: Talk to an agent
+
+    private func promptChanged(_ state: PromptState) {
+        switch state {
+        case .composing:
+            panel.acceptsKeyboard = true
+            panel.makeKey()
+        case .none:
+            panel.acceptsKeyboard = false
+            panel.resignKey()
+            scheduleModeChange()
+        case .sending, .failed:
+            break
         }
     }
 

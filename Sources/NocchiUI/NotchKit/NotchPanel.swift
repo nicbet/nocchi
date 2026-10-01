@@ -21,7 +21,9 @@ final class NotchPanel: NSPanel {
         isReleasedWhenClosed = false
     }
 
-    // Never steal focus from the user's app. (Revisit for the prompt field in M5.)
-    override var canBecomeKey: Bool { false }
+    /// Only while writing to an agent. Being a non-activating panel, it takes the keyboard without
+    /// activating nocchi, so the user's app stays frontmost.
+    var acceptsKeyboard = false
+    override var canBecomeKey: Bool { acceptsKeyboard }
     override var canBecomeMain: Bool { false }
 }
