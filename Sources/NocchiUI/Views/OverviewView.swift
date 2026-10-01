@@ -81,6 +81,7 @@ private struct FocusCard: View {
         .padding(.horizontal, Self.padding)
         .frame(maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
+        .focusesAgent(primary, in: store)
     }
 }
 
@@ -143,6 +144,7 @@ private struct ChipsCard: View {
                                 let index = row * 2 + column
                                 if index < visible.count {
                                     AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
+                                        .focusesAgent(visible[index], in: store)
                                 } else if index == visible.count, overflow > 0 {
                                     OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
                                 } else {

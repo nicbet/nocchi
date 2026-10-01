@@ -25,7 +25,7 @@ public final class NotchController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
         ), store: store)
-        let host = NSHostingView(rootView: NotchView(model: model).resolvesReduceMotion())
+        let host = FirstClickHostingView(rootView: NotchView(model: model).resolvesReduceMotion())
         host.sizingOptions = []
         panel.contentView = host
     }
@@ -154,4 +154,10 @@ public final class NotchController {
         hoverPoll?.cancel()
         hoverPoll = nil
     }
+}
+
+/// The panel never becomes key, so without this the first click on a chip or button would only
+/// "activate" the panel and do nothing.
+private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

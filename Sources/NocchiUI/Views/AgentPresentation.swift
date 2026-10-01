@@ -62,3 +62,38 @@ extension AgentStore {
         return reason
     }
 }
+
+extension View {
+    /// Clicking focuses `entry`'s agent (and its terminal), if its adapter can.
+    func focusesAgent(_ entry: AgentEntry?, in store: AgentStore) -> some View {
+        modifier(FocusOnClick(entry: entry, store: store))
+    }
+}
+
+private struct FocusOnClick: ViewModifier {
+    let entry: AgentEntry?
+    let store: AgentStore
+
+    func body(content: Content) -> some View {
+        if let entry, store.capabilities(of: entry.ref).contains(.focus) {
+            Button {
+                Task { try? await store.perform(.focus(entry.ref)) }
+            } label: {
+                content.contentShape(Rectangle())
+            }
+            .buttonStyle(PressScale())
+            .help("Open \(entry.info.displayName)")
+        } else {
+            content
+        }
+    }
+}
+
+/// Shrinks a little while pressed.
+struct PressScale: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(duration: 0.2, bounce: 0.3), value: configuration.isPressed)
+    }
+}
