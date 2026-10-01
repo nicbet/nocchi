@@ -1,6 +1,9 @@
 import Foundation
 import NocchiCore
+import OSLog
 import Synchronization
+
+let herdrLog = Logger(subsystem: "com.github.nicbet.nocchi", category: "herdr")
 
 /// Agents from Herdr. Each `events()` stream runs its own sync loop:
 /// snapshot → subscribe to the agent panes → apply events; re-snapshot every 30 s and whenever
@@ -95,7 +98,13 @@ public final class HerdrAdapter: AgentAdapter {
     }
 
     private func publish(_ events: [AgentEvent], _ tracker: HerdrTracker, to out: AsyncStream<AgentEvent>.Continuation) {
+        let before = statuses.withLock { $0 }
         for event in events { out.yield(event) }
+        // Status changes are logged, to trace states that look wrong (`log stream --predicate
+        // 'subsystem == "com.github.nicbet.nocchi"'`).
+        for (pane, info) in tracker.agents where before[pane] != info.status {
+            herdrLog.info("status \(pane, privacy: .public): \(String(describing: before[pane]), privacy: .public) → \(String(describing: info.status), privacy: .public) via \(Self.describe(events), privacy: .public)")
+        }
         statuses.withLock { $0 = tracker.agents.mapValues(\.status) }
     }
 
@@ -174,6 +183,18 @@ public final class HerdrAdapter: AgentAdapter {
             for await event in stream.events { sink.yield(.event(event)) }
             sink.yield(.ended(generation: generation))
         }
+    }
+
+    private static func describe(_ events: [AgentEvent]) -> String {
+        events.map { event in
+            switch event {
+            case .snapshot: "snapshot"
+            case .upserted: "event"
+            case .removed: "removed"
+            case .turnFinished: "turnFinished"
+            default: "other"
+            }
+        }.joined(separator: ",")
     }
 
     private static func reason(_ error: Error) -> String {
