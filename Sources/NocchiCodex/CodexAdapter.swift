@@ -131,12 +131,15 @@ public final class CodexAdapter: AgentAdapter {
 }
 
 /// Finds running Codex CLI sessions: `codex` processes (not the app server, not the desktop
-/// app's helpers), the rollout each writes, and the terminal it runs in. Each process is looked
-/// up once.
+/// app's helpers), the rollout each writes, and the terminal it runs in. Codex creates its rollout
+/// only with the first prompt, so processes without one are looked up again on every scan; found
+/// sessions are remembered. Codex doesn't keep the rollout open, so it's matched by folder.
 struct CodexDiscovery {
     let home: URL
     let leavesHerdrToHerdr: Bool
-    private var known: [Int32: CodexSession?] = [:]
+    private var found: [Int32: CodexSession] = [:]
+    /// Processes left to Herdr: no need to look again.
+    private var skipped: Set<Int32> = []
 
     init(home: URL, leavesHerdrToHerdr: Bool) {
         self.home = home
@@ -147,11 +150,16 @@ struct CodexDiscovery {
         let table = await ProcessTable.current()
         let processes = table.entries.values.filter(Self.isCLI)
         let pids = Set(processes.map(\.pid))
-        known = known.filter { pids.contains($0.key) }
-        for process in processes where known[process.pid] == nil {
-            known[process.pid] = await lookup(process, in: table)
+        found = found.filter { pids.contains($0.key) }
+        skipped.formIntersection(pids)
+        for process in processes where found[process.pid] == nil && !skipped.contains(process.pid) {
+            switch await lookup(process, in: table) {
+            case .session(let session): found[process.pid] = session
+            case .insideHerdr: skipped.insert(process.pid)
+            case .notYet: break
+            }
         }
-        return known.values.compactMap { $0 }.sorted { $0.pid < $1.pid }
+        return found.values.sorted { $0.pid < $1.pid }
     }
 
     /// The interactive CLI: `codex` or `codex resume …`, not `codex app-server`, `codex exec` or
@@ -162,16 +170,23 @@ struct CodexDiscovery {
         return !words.contains { ["app-server", "exec", "mcp", "mcp-server", "login", "proto"].contains($0) }
     }
 
-    private func lookup(_ process: ProcessTable.Entry, in table: ProcessTable) async -> CodexSession? {
+    private enum Lookup {
+        case session(CodexSession)
+        case insideHerdr
+        /// No rollout yet (no prompt so far).
+        case notYet
+    }
+
+    private func lookup(_ process: ProcessTable.Entry, in table: ProcessTable) async -> Lookup {
         let chain = [process] + table.ancestors(of: process.pid)
-        if leavesHerdrToHerdr, chain.contains(where: { $0.command == "herdr" }) { return nil }
+        if leavesHerdrToHerdr, chain.contains(where: { $0.command == "herdr" }) { return .insideHerdr }
         let files = await Self.openFiles(of: process.pid)
         let rollout = files.paths.first { $0.contains("/.codex/sessions/") && $0.hasSuffix(".jsonl") }.map(URL.init(fileURLWithPath:))
             ?? newestRollout(in: files.cwd)
-        guard let rollout, let meta = Self.sessionMeta(rollout) else { return nil }
+        guard let rollout, let meta = Self.sessionMeta(rollout) else { return .notYet }
         let host = await MainActor.run { TerminalApps.host(of: process.pid, in: table)?.processIdentifier }
-        return CodexSession(pid: process.pid, sessionID: meta.id, rollout: rollout, cwd: meta.cwd ?? files.cwd,
-                            title: threadName(meta.id), hostID: host)
+        return .session(CodexSession(pid: process.pid, sessionID: meta.id, rollout: rollout, cwd: meta.cwd ?? files.cwd,
+                                     title: threadName(meta.id), hostID: host))
     }
 
     /// When the process doesn't keep its rollout open: the newest rollout of the last two days
@@ -196,7 +211,7 @@ struct CodexDiscovery {
     static func sessionMeta(_ rollout: URL) -> (id: String, cwd: String?)? {
         guard let handle = try? FileHandle(forReadingFrom: rollout) else { return nil }
         defer { try? handle.close() }
-        guard let head = try? handle.read(upToCount: 64 * 1024),
+        guard let head = try? handle.read(upToCount: 256 * 1024),  // session_meta carries instructions: ~50 KB
               let line = head.split(separator: 0x0A).first,
               case .session(let id, let cwd) = CodexRolloutEvent.parse(Data(line)) else { return nil }
         return (id, cwd)
