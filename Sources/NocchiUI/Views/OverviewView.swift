@@ -29,11 +29,17 @@ struct OverviewView: View {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
                         .transition(.blurReplace)
                 } else {
+                    // With nobody else, the focus card takes the whole width.
+                    let hasOthers = !store.others.isEmpty
                     HStack(spacing: 10) {
                         FocusCard(model: model, card: card)
-                            .frame(width: (body.width - 36 - 10) * 0.52)
-                        ChipsCard(store: store, waits: model.composerJustClosed)
+                            .frame(width: hasOthers ? (body.width - 2 * Self.gutter - 10) * 0.52 : body.width - 2 * Self.gutter)
+                        if hasOthers {
+                            ChipsCard(store: store, waits: model.composerJustClosed)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
                     }
+                    .animation(.spring(duration: 0.45, bounce: 0.15), value: hasOthers)
                     .transition(.opacity)
                 }
             }
@@ -206,12 +212,13 @@ private struct StepCarousel: View {
     }
 }
 
-/// One chip per other agent, two columns, tinted by state.
+/// One chip per other agent, tinted by state: one column for up to three, two columns (up to 2×3)
+/// beyond, the last chip "+N more" when they don't all fit.
 private struct ChipsCard: View {
     let store: AgentStore
     /// Slide in only once the focus card is back in place, instead of overlapping it.
     @State private var shown: Bool
-    static let maxChips = 4
+    static let maxChips = ChipLayout.maxChips
 
     init(store: AgentStore, waits: Bool) {
         self.store = store
@@ -222,32 +229,27 @@ private struct ChipsCard: View {
         let others = store.others
         let (visible, hidden) = store.others(fitting: Self.maxChips)
         let overflow = hidden.count
-        Group {
-            if others.isEmpty {
-                Text("No other agents").font(.system(size: 12)).foregroundStyle(.secondary)
-            } else {
-                Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-                    ForEach(0..<2, id: \.self) { row in
-                        GridRow {
-                            ForEach(0..<2, id: \.self) { column in
-                                let index = row * 2 + column
-                                if index < visible.count {
-                                    AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
-                                        .onAgentClick(help: "Show \(visible[index].info.displayName)") {
-                                            store.select(visible[index].ref)
-                                        }
-                                } else if index == visible.count, overflow > 0 {
-                                    OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
-                                } else {
-                                    Color.clear.frame(height: 34)
+        let layout = ChipLayout(count: visible.count + (overflow > 0 ? 1 : 0))
+        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+            ForEach(0..<layout.rows, id: \.self) { row in
+                GridRow {
+                    ForEach(0..<layout.columns, id: \.self) { column in
+                        let index = row * layout.columns + column
+                        if index < visible.count {
+                            AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
+                                .onAgentClick(help: "Show \(visible[index].info.displayName)") {
+                                    store.select(visible[index].ref)
                                 }
-                            }
+                        } else if index == visible.count, overflow > 0 {
+                            OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
+                        } else {
+                            Color.clear.frame(height: 34)
                         }
                     }
                 }
-                .padding(.horizontal, 14)
             }
         }
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
         .animation(.spring(duration: 0.4, bounce: 0.15), value: others.map(\.ref))
@@ -257,6 +259,19 @@ private struct ChipsCard: View {
             guard !shown else { return }
             withAnimation(.spring(duration: 0.3, bounce: 0.15).delay(0.18)) { shown = true }
         }
+    }
+}
+
+/// Columns and rows for `count` chips (the overflow chip included).
+struct ChipLayout: Equatable {
+    static let maxChips = 6
+    var columns: Int
+    var rows: Int
+
+    init(count: Int) {
+        let count = max(1, min(count, Self.maxChips))
+        columns = count <= 3 ? 1 : 2
+        rows = (count + columns - 1) / columns
     }
 }
 
