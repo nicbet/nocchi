@@ -153,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             store.stop("mock")
             let settings = NocchiSettings.shared
             let socket = Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)
-            store.run(HerdrAdapter(socketPath: socket))
+            store.run(HerdrAdapter(socketPath: socket, watchesTerminal: true))
         }
     }
 

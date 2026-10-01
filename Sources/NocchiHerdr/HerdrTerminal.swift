@@ -84,3 +84,63 @@ public enum HerdrTerminal {
         return table
     }
 }
+
+/// Whether the terminal app hosting Herdr is the frontmost app: now, then on every change.
+/// Herdr treats a focused pane as seen; this tells whether anyone could actually see it.
+/// When the host can't be found (Herdr over SSH, say), it reports `true`: plain Herdr behavior.
+@MainActor
+enum TerminalPresence {
+    static func updates() -> AsyncStream<Bool> {
+        let (stream, continuation) = AsyncStream.makeStream(of: Bool.self, bufferingPolicy: .bufferingNewest(1))
+        let watcher = Watcher(continuation)
+        continuation.onTermination = { _ in Task { @MainActor in watcher.stop() } }
+        Task { await watcher.start() }
+        return stream
+    }
+
+    @MainActor
+    private final class Watcher {
+        let continuation: AsyncStream<Bool>.Continuation
+        var host: pid_t?
+        var observer: NSObjectProtocol?
+        var last: Bool?
+
+        init(_ continuation: AsyncStream<Bool>.Continuation) {
+            self.continuation = continuation
+        }
+
+        func start() async {
+            host = await HerdrTerminal.hostApp()?.processIdentifier
+            report()
+            observer = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.activated() }
+            }
+        }
+
+        func stop() {
+            observer.map(NSWorkspace.shared.notificationCenter.removeObserver)
+            observer = nil
+        }
+
+        private func activated() {
+            // The terminal may have been restarted since: look again.
+            if let host, NSRunningApplication(processIdentifier: host) != nil {
+                report()
+            } else {
+                Task {
+                    host = await HerdrTerminal.hostApp()?.processIdentifier
+                    report()
+                }
+            }
+        }
+
+        private func report() {
+            let frontmost = host.map { NSWorkspace.shared.frontmostApplication?.processIdentifier == $0 } ?? true
+            guard frontmost != last else { return }
+            last = frontmost
+            continuation.yield(frontmost)
+        }
+    }
+}

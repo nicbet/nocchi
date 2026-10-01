@@ -8,9 +8,20 @@ import NocchiCore
 /// - A turn that finishes in the focused pane goes `working → idle` without `done`, so any
 ///   `working → done|idle` emits `.turnFinished`.
 /// - An empty title keeps the previous one.
+/// - Herdr counts a focused pane as seen even when its terminal is behind other apps. A turn that
+///   finishes then, or a `done` cleared then, stays `.done` here ("unread") until the user can
+///   actually have seen it: see `unread`.
 struct HerdrTracker {
     let adapter: AdapterID
     private(set) var agents: [String: AgentInfo] = [:]
+    /// Whether the terminal app running Herdr is frontmost. Assumed true when unknown, which is
+    /// plain Herdr behavior.
+    private(set) var terminalFrontmost = true
+    /// Panes Herdr reports `idle` that nocchi still shows `.done`: their turn ended (or their
+    /// `done` was cleared) while the terminal was in the background. A narrow overlay on Herdr:
+    /// it only turns `idle` into `.done`, and ends when the user looks at the pane (terminal
+    /// frontmost with the pane focused), when Herdr reports any other state, or when the pane goes.
+    private(set) var unread: Set<String> = []
     private var tabLabels: [String: String] = [:]
     private var paneTabs: [String: String] = [:]
 
@@ -35,13 +46,14 @@ struct HerdrTracker {
             let old = agents[pane.paneID]
             if let tab = pane.tabID { paneTabs[pane.paneID] = tab }
             var info = old ?? AgentInfo(ref: ref(pane.paneID), kind: .other("agent"), status: .starting, changedAt: now)
-            update(&info, from: pane, now: now)
             info.isFocused = snapshot.focusedPaneID.map { $0 == pane.paneID } ?? pane.focused ?? false
+            update(&info, from: pane, now: now)
             if Self.finishesTurn(old?.status, info.status) { finished.append(.turnFinished(info.ref)) }
             next[pane.paneID] = info
         }
         agents = next
         paneTabs = paneTabs.filter { next[$0.key] != nil }
+        unread.formIntersection(next.keys)
         return [.snapshot(next.values.sorted { $0.ref.localID < $1.ref.localID })] + finished
     }
 
@@ -73,11 +85,13 @@ struct HerdrTracker {
         case .paneRemoved(let pane):
             guard let info = agents.removeValue(forKey: pane) else { break }
             paneTabs[pane] = nil
+            unread.remove(pane)
             out.events = [.removed(info.ref)]
 
         case .paneFocused(let pane):
             for var info in agents.values.sorted(by: { $0.ref.localID < $1.ref.localID }) {
                 info.isFocused = info.ref.localID == pane
+                if info.isFocused { markSeen(&info, now: now) }
                 out.events += commit(info)
             }
 
@@ -92,6 +106,42 @@ struct HerdrTracker {
         return out
     }
 
+    /// The terminal running Herdr came to the front or went behind another app. Coming to the
+    /// front, the focused pane is now really seen.
+    mutating func setTerminalFrontmost(_ frontmost: Bool, now: Date) -> [AgentEvent] {
+        terminalFrontmost = frontmost
+        guard frontmost else { return [] }
+        var events: [AgentEvent] = []
+        for var info in agents.values.sorted(by: { $0.ref.localID < $1.ref.localID }) where info.isFocused {
+            markSeen(&info, now: now)
+            events += commit(info)
+        }
+        return events
+    }
+
+    /// Clears the unread overlay when the user can see the pane.
+    private mutating func markSeen(_ info: inout AgentInfo, now: Date) {
+        guard terminalFrontmost, unread.remove(info.ref.localID) != nil, info.status == .done else { return }
+        info.status = .idle
+        info.changedAt = now
+    }
+
+    /// Applies the unread overlay to the status Herdr reports. Only ever turns `idle` into `.done`.
+    private mutating func overlay(_ pane: String, from old: AgentStatus, to new: AgentStatus) -> AgentStatus {
+        guard new == .idle else {
+            // Herdr knows better about every other state, including its own `done`.
+            unread.remove(pane)
+            return new
+        }
+        if unread.contains(pane) { return .done }
+        // Finished, or marked seen, while the terminal is behind another app: not really seen.
+        if !terminalFrontmost, old == .working || old == .done {
+            unread.insert(pane)
+            return .done
+        }
+        return new
+    }
+
     /// Stores an updated agent and reports the change, if any.
     private mutating func commit(_ info: AgentInfo) -> [AgentEvent] {
         guard let old = agents[info.ref.localID], info != old else { return [] }
@@ -101,9 +151,15 @@ struct HerdrTracker {
         return events
     }
 
-    private func update(_ info: inout AgentInfo, from pane: HerdrPane, now: Date) {
+    private mutating func update(_ info: inout AgentInfo, from pane: HerdrPane, now: Date) {
         if let agent = pane.agent, !agent.isEmpty { info.kind = AgentKind(name: agent) }
-        let status = Self.status(pane.agentStatus, agent: pane.agent, previous: info.status)
+        let reported = Self.status(pane.agentStatus, agent: pane.agent, previous: info.status)
+        var status = overlay(pane.paneID, from: info.status, to: reported)
+        // Unread, but the user is looking at it right now.
+        if status == .done, reported == .idle, info.isFocused, terminalFrontmost {
+            unread.remove(pane.paneID)
+            status = .idle
+        }
         if status != info.status {
             info.status = status
             info.changedAt = now

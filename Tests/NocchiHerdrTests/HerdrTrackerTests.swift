@@ -153,4 +153,80 @@ import Testing
         #expect(tracker.agents["w1:p1"]?.name == "Nocchi")
         #expect(tracker.agents["w1:p2"]?.name == "Docs")
     }
+
+    // MARK: Unread while the terminal is in the background
+
+    func focusedWorking(_ tracker: inout HerdrTracker) {
+        _ = tracker.apply(HerdrSnapshot(focusedPaneID: "w1:p1", agents: [pane("w1:p1", status: "working"), pane("w1:p2")]), now: t0)
+    }
+
+    func status(_ tracker: HerdrTracker, _ id: String = "w1:p1") -> AgentStatus? { tracker.agents[id]?.status }
+
+    @Test func aFocusedTurnFinishingBehindAnotherAppStaysDone() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        focusedWorking(&tracker)
+        _ = tracker.setTerminalFrontmost(false, now: t0)
+        let out = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        #expect(status(tracker) == .done, "Herdr says idle because the pane is focused, but nobody saw it")
+        #expect(out.events.contains(.turnFinished(ref("w1:p1"))))
+        // Herdr repeats idle: still unread.
+        _ = tracker.apply(HerdrSnapshot(focusedPaneID: "w1:p1", agents: [pane("w1:p1", status: "idle"), pane("w1:p2")]), now: t1)
+        #expect(status(tracker) == .done)
+    }
+
+    @Test func comingToTheFrontOnThePaneMarksItSeen() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        focusedWorking(&tracker)
+        _ = tracker.setTerminalFrontmost(false, now: t0)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        let events = tracker.setTerminalFrontmost(true, now: t1)
+        #expect(status(tracker) == .idle)
+        #expect(events.count == 1)
+        #expect(tracker.unread.isEmpty)
+    }
+
+    @Test func frontmostOnAnotherPaneDoesntCountUntilItsFocused() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        _ = tracker.apply(HerdrSnapshot(focusedPaneID: "w1:p2", agents: [pane("w1:p1", status: "working"), pane("w1:p2")]), now: t0)
+        _ = tracker.setTerminalFrontmost(false, now: t0)
+        // Unfocused: Herdr itself says done; switching to it while in the background clears it in Herdr.
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "done", title: nil), now: t1)
+        _ = tracker.apply(.paneFocused("w1:p1"), now: t1)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        #expect(status(tracker) == .done, "Herdr's done was cleared while nobody could see it")
+        _ = tracker.apply(.paneFocused("w1:p2"), now: t1)
+        _ = tracker.setTerminalFrontmost(true, now: t1)
+        #expect(status(tracker) == .done, "frontmost, but looking at another pane")
+        _ = tracker.apply(.paneFocused("w1:p1"), now: t1)
+        #expect(status(tracker) == .idle)
+    }
+
+    @Test func anyOtherHerdrStateEndsTheOverlay() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        focusedWorking(&tracker)
+        _ = tracker.setTerminalFrontmost(false, now: t0)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "working", title: nil), now: t1)
+        #expect(status(tracker) == .working)
+        #expect(tracker.unread.isEmpty)
+        _ = tracker.apply(.paneRemoved("w1:p1"), now: t1)
+        #expect(tracker.unread.isEmpty)
+    }
+
+    @Test func inFrontEverythingIsPlainHerdr() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        focusedWorking(&tracker)
+        let out = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        #expect(status(tracker) == .idle)
+        #expect(out.events.contains(.turnFinished(ref("w1:p1"))), "still celebrated briefly")
+        #expect(tracker.unread.isEmpty)
+    }
+
+    @Test func idleAgentsInTheBackgroundStayIdle() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        _ = tracker.setTerminalFrontmost(false, now: t0)
+        _ = tracker.apply(HerdrSnapshot(agents: [pane("w1:p1", status: "idle")]), now: t0)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
+        #expect(status(tracker) == .idle)
+    }
 }

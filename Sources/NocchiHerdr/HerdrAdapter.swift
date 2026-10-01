@@ -25,22 +25,27 @@ public final class HerdrAdapter: AgentAdapter {
         public init() {}
     }
     public let timing: Timing
+    /// Watch whether the terminal hosting Herdr is frontmost, so a turn that ends while it's
+    /// behind other apps stays done until seen. Off in tests: plain Herdr behavior.
+    public let watchesTerminal: Bool
 
     /// Last known status per pane, for refusing prompts to blocked agents.
     private let statuses = Mutex<[String: AgentStatus]>([:])
 
     public init(
         client: HerdrClient, id: AdapterID = "herdr",
-        capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing()
+        capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing(),
+        watchesTerminal: Bool = false
     ) {
         self.client = client
         self.id = id
         self.capabilities = capabilities
         self.timing = timing
+        self.watchesTerminal = watchesTerminal
     }
 
-    public convenience init(socketPath: String = Herdr.socketPath()) {
-        self.init(client: HerdrClient(socketPath: socketPath))
+    public convenience init(socketPath: String = Herdr.socketPath(), watchesTerminal: Bool = false) {
+        self.init(client: HerdrClient(socketPath: socketPath), watchesTerminal: watchesTerminal)
     }
 
     // MARK: Events
@@ -56,6 +61,7 @@ public final class HerdrAdapter: AgentAdapter {
         case event(HerdrEvent)
         case ended(generation: Int)
         case reconcile
+        case terminal(frontmost: Bool)
     }
 
     private func sync(_ out: AsyncStream<AgentEvent>.Continuation) async {
@@ -125,7 +131,12 @@ public final class HerdrAdapter: AgentAdapter {
                 sink.yield(.reconcile)
             }
         }
+        let presence = Task { [watchesTerminal] in
+            guard watchesTerminal else { return }
+            for await frontmost in await TerminalPresence.updates() { sink.yield(.terminal(frontmost: frontmost)) }
+        }
         defer {
+            presence.cancel()
             ticker.cancel()
             stream.close()
             sink.finish()
@@ -142,6 +153,10 @@ public final class HerdrAdapter: AgentAdapter {
                 throw HerdrError.unavailable("event stream closed")
             case .reconcile:
                 break
+            case .terminal(let frontmost):
+                herdrLog.info("terminal frontmost: \(frontmost, privacy: .public)")
+                publish(tracker.setTerminalFrontmost(frontmost, now: Date()), tracker, to: out)
+                continue
             }
             var snapshot = try await client.snapshot()
             publish(tracker.apply(snapshot, now: Date()), tracker, to: out)
