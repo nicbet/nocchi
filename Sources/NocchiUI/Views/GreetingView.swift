@@ -3,9 +3,19 @@ import SwiftUI
 
 /// The greeting's choreography. Everything finishes before `duration`, when the notch collapses.
 enum GreetingTimeline {
-    /// No new sparks after this; the ones in flight finish their lives.
+    /// Rings of sparks fired outward from the face.
+    static let bursts: [Double] = [0, 0.55, 1.1, 1.65]
+    static let sparksPerBurst = 170
+    /// Steady sparkle between the bursts. No new sparks after `emitEnd`; the ones in flight
+    /// finish their lives.
     static let emitEnd = 2.0
-    static let sparkLifetime = 1.0...1.8
+    static let sparkLifetime = 1.2...1.9
+
+    /// Glow strength: a base level plus a flare after each burst.
+    static func glow(_ t: Double) -> Double {
+        let flare = bursts.reduce(0) { sum, burst in t >= burst ? sum + exp(-(t - burst) * 5) : sum }
+        return (0.6 + 0.5 * min(1, flare)) * (1 - progress(t, glowFade))
+    }
     /// The wave speeds up into a goodbye, then the hands tuck into the face.
     static let goodbye = 2.2...2.6
     static let tuck = 2.6...3.0
@@ -47,15 +57,15 @@ struct GreetingScene: View {
     let t: Double
 
     var body: some View {
-        let glow = 1 - GreetingTimeline.progress(t, GreetingTimeline.glowFade)
+        let glow = GreetingTimeline.glow(t)
         ZStack {
-            ParticleStreams(t: t).allowsHitTesting(false)
+            Sparks(t: t).allowsHitTesting(false)
             // The glow is a background so its size doesn't stretch the card.
             WavingFace(t: t)
                 .background {
-                    RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.6).opacity(0.35 * glow), .clear],
-                                   center: .center, startRadius: 10, endRadius: 110)
-                        .frame(width: 240, height: 240)
+                    RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.6).opacity(0.45 * glow), .clear],
+                                   center: .center, startRadius: 10, endRadius: 130)
+                        .frame(width: 280, height: 280)
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,50 +116,76 @@ private struct WavingFace: View {
     }
 }
 
-/// Small sparks radiating outward from the face. Each spark slot is reborn on its own cycle until
-/// `emitEnd`; sparks born after that never appear, so the burst winds down on its own.
-private struct ParticleStreams: View {
+/// A celebration: rings of sparks bursting out of the face, plus a steady sparkle in between.
+private struct Sparks: View {
     let t: Double
-    static let count = 220
     /// Sparks start just outside the face (radius 35) and its hands.
-    static let startRadius: CGFloat = 44
+    static let startRadius: CGFloat = 42
+    static let trickleSlots = 120
+    static let colors: [Color] = [
+        .white, .white, .white,
+        Color(red: 1.0, green: 0.88, blue: 0.58),   // warm gold
+        Color(red: 1.0, green: 0.94, blue: 0.80),   // cream
+    ]
 
     var body: some View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let lifetimes = GreetingTimeline.sparkLifetime
-            for i in 0..<Self.count {
-                // Deterministic pseudo-random per spark slot.
-                let seed = Double(i)
-                func rand(_ k: Double) -> Double {
-                    let v = sin(seed * 12.9898 + k * 78.233) * 43758.5453
-                    return v - floor(v)
+
+            // Bursts: a full ring each, angles spread evenly with a little jitter.
+            for (b, burst) in GreetingTimeline.bursts.enumerated() where t >= burst {
+                let count = GreetingTimeline.sparksPerBurst
+                for i in 0..<count {
+                    let h = { (k: UInt64) in hash01(UInt64(b), UInt64(i), k) }
+                    let lifetime = lerp(GreetingTimeline.sparkLifetime, h(1))
+                    let age = t - burst
+                    guard age < lifetime else { continue }
+                    let angle = (Double(i) + h(2) * 0.8) / Double(count) * 2 * .pi
+                    let speed = 140 + h(3) * 260          // initial speed, pt/s
+                    draw(&context, center: center, angle: angle, speed: speed, age: age, lifetime: lifetime,
+                         size: 1.0 + h(4) * 1.8, color: Self.colors[Int(h(5) * Double(Self.colors.count))], twinkle: h(6))
                 }
-                let lifetime = lifetimes.lowerBound + rand(3) * (lifetimes.upperBound - lifetimes.lowerBound)
-                let phase = rand(4) * lifetime
+            }
+
+            // Trickle: each slot re-fires on its own cycle until emitEnd.
+            for i in 0..<Self.trickleSlots {
+                let slot = { (k: UInt64) in hash01(99, UInt64(i), k) }
+                let lifetime = lerp(GreetingTimeline.sparkLifetime, slot(1))
+                let phase = slot(2) * lifetime
                 let cycle = floor((t + phase) / lifetime)
                 let birth = cycle * lifetime - phase
                 guard birth >= 0, birth <= GreetingTimeline.emitEnd else { continue }
-                let age = t - birth
-                let progress = age / lifetime
-
-                // A new direction and speed every cycle, so the burst doesn't repeat visibly.
-                func r(_ k: Double) -> Double { rand(k + cycle * 17.3).truncatingRemainder(dividingBy: 1) }
-                let angle = r(1) * 2 * .pi
-                let speed = 40 + r(2) * 80
-
-                // Outward along the angle, with a slight sideways drift so paths aren't ruler-straight.
-                let distance = Self.startRadius + CGFloat(speed * age)
-                let drift = CGFloat(sin(age * 3 + r(5) * 6) * 6 * progress)
-                let x = center.x + cos(angle) * distance - sin(angle) * drift
-                let y = center.y + sin(angle) * distance + cos(angle) * drift
-
-                let fadeIn = min(1, age / 0.2)
-                let opacity = (0.4 + r(6) * 0.6) * fadeIn * (1 - progress)
-                let radius = (0.7 + r(7) * 1.3) * (1 - 0.4 * progress)
-                context.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius)),
-                             with: .color(.white.opacity(opacity)))
+                let h = { (k: UInt64) in hash01(UInt64(i), UInt64(cycle + 1000), k) }
+                draw(&context, center: center, angle: h(3) * 2 * .pi, speed: 60 + h(4) * 140, age: t - birth,
+                     lifetime: lifetime, size: 0.7 + h(5) * 1.2, color: Self.colors[Int(h(6) * Double(Self.colors.count))], twinkle: h(7))
             }
         }
     }
+
+    /// One spark: flies out fast and slows down (ease-out), twinkles, shrinks and fades.
+    private func draw(_ context: inout GraphicsContext, center: CGPoint, angle: Double, speed: Double, age: Double,
+                      lifetime: Double, size: Double, color: Color, twinkle: Double) {
+        let progress = age / lifetime
+        let drag = 1.6
+        let distance = Self.startRadius + CGFloat(speed * (1 - exp(-drag * age)) / drag)
+        let x = center.x + cos(angle) * distance
+        let y = center.y + sin(angle) * distance
+        let flicker = 0.75 + 0.25 * sin(age * 18 + twinkle * 6.3)
+        let opacity = min(1, age / 0.08) * (1 - progress * progress) * flicker
+        let r = size * (1 - 0.5 * progress)
+        context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)), with: .color(color.opacity(opacity)))
+    }
+}
+
+private func lerp(_ range: ClosedRange<Double>, _ x: Double) -> Double {
+    range.lowerBound + x * (range.upperBound - range.lowerBound)
+}
+
+/// Uniform pseudo-random value in [0, 1) from three integers (SplitMix64 mixing).
+func hash01(_ a: UInt64, _ b: UInt64, _ c: UInt64) -> Double {
+    var z = a &* 0x9E37_79B9_7F4A_7C15 &+ b &* 0xBF58_476D_1CE4_E5B9 &+ c &* 0x94D0_49BB_1331_11EB &+ 0x2545_F491_4F6C_DD1D
+    z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+    z ^= z >> 31
+    return Double(z >> 11) / Double(1 << 53)
 }
