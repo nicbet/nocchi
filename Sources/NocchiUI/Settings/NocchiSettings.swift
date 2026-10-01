@@ -45,6 +45,10 @@ public final class NocchiSettings {
     public var watchesClaude: Bool {
         didSet { defaults.set(watchesClaude, forKey: Keys.watchesClaude) }
     }
+    /// Codex CLI sessions anywhere else (read from their processes and rollout logs).
+    public var watchesCodex: Bool {
+        didSet { defaults.set(watchesCodex, forKey: Keys.watchesCodex) }
+    }
 
     /// A named Herdr session to watch instead of the default one.
     public var herdrSession: String? {
@@ -67,6 +71,7 @@ public final class NocchiSettings {
         screenName = defaults.string(forKey: Keys.screenName)
         usesHerdr = defaults.object(forKey: Keys.usesHerdr) as? Bool ?? true
         watchesClaude = defaults.object(forKey: Keys.watchesClaude) as? Bool ?? true
+        watchesCodex = defaults.object(forKey: Keys.watchesCodex) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
@@ -80,6 +85,7 @@ public final class NocchiSettings {
         static let screenName = "screenName"
         static let usesHerdr = "usesHerdr"
         static let watchesClaude = "watchesClaude"
+        static let watchesCodex = "watchesCodex"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
     }

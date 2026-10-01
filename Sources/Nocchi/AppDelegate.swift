@@ -1,5 +1,6 @@
 import AppKit
 import NocchiClaude
+import NocchiCodex
 import NocchiCore
 import NocchiHerdr
 import NocchiHooks
@@ -175,6 +176,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let count = store.state.agents.keys.filter { $0.adapter == "claude" }.count
             parts.append(count == 0 ? "Claude Code" : "Claude Code (\(count) outside Herdr)")
         }
+        if settings.watchesCodex {
+            let count = store.state.agents.keys.filter { $0.adapter == "codex" }.count
+            parts.append(count == 0 ? "Codex" : "Codex (\(count))")
+        }
         return parts.isEmpty ? "No agent sources" : parts.joined(separator: " · ")
     }
 
@@ -186,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let demo {
             store.stop("herdr")
             store.stop("claude")
+            store.stop("codex")
             store.run(MockAdapter(scenario: demo))
             return
         }
@@ -203,6 +209,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if settings.watchesClaude {
             store.run(ClaudeAdapter(hooks: hookServer, leavesHerdrToHerdr: settings.usesHerdr))
         }
+        store.stop("codex")
+        if settings.watchesCodex {
+            store.run(CodexAdapter(hooks: hookServer, leavesHerdrToHerdr: settings.usesHerdr))
+        }
     }
 
     private func sourcesMenuItem() -> NSMenuItem {
@@ -210,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (title, setting, tip) in [
             ("Herdr", \NocchiSettings.usesHerdr, "Agents running in Herdr panes."),
             ("Claude Code", \NocchiSettings.watchesClaude, "Claude sessions anywhere else: a terminal tab, an IDE. Read from Claude's own session list; nothing to set up."),
+            ("Codex", \NocchiSettings.watchesCodex, "Codex CLI sessions anywhere else. Read from their processes and session logs; nothing to set up."),
         ] {
             let item = menu.addItem(withTitle: title, action: #selector(toggleSource(_:)), keyEquivalent: "")
             item.target = self
