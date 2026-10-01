@@ -6,6 +6,7 @@ import NocchiUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var notch: NotchController?
+    private let gallery = MoodGalleryWindow()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let notch = NotchController()
@@ -42,6 +43,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Collapse", action: #selector(debugCollapse), keyEquivalent: "c").target = self
         menu.addItem(withTitle: "Keep Expanded", action: #selector(debugTogglePinned(_:)), keyEquivalent: "p").target = self
         menu.addItem(withTitle: "Show Hit Area", action: #selector(debugToggleHitArea(_:)), keyEquivalent: "h").target = self
+        menu.addItem(.separator())
+
+        let moods = NSMenu()
+        for mood in Mood.allCases {
+            let item = moods.addItem(withTitle: mood.rawValue.capitalized, action: #selector(debugSetMood(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mood.rawValue
+            item.state = mood == .idle ? .on : .off
+        }
+        let moodItem = NSMenuItem(title: "Primary Mood", action: nil, keyEquivalent: "")
+        moodItem.submenu = moods
+        menu.addItem(moodItem)
+        menu.addItem(withTitle: "Mood Gallery…", action: #selector(debugShowGallery), keyEquivalent: "g").target = self
 
         let item = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
         item.submenu = menu
@@ -56,6 +70,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notch.setPinned(!notch.model.isPinned)
         sender.state = notch.model.isPinned ? .on : .off
     }
+
+    @objc private func debugSetMood(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mood = Mood(rawValue: raw) else { return }
+        notch?.model.primaryMood = mood
+        for item in sender.menu?.items ?? [] { item.state = item === sender ? .on : .off }
+    }
+
+    @objc private func debugShowGallery() { gallery.show() }
 
     @objc private func debugToggleHitArea(_ sender: NSMenuItem) {
         guard let notch else { return }

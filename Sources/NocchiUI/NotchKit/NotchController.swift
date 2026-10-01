@@ -11,7 +11,7 @@ public final class NotchController {
     private var globalMonitor: Any?
     private var hoverPoll: Task<Void, Never>?
     private var pendingModeChange: Task<Void, Never>?
-    private var screenObserver: NSObjectProtocol?
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
 
     /// Delay before opening on hover, so passing through the menu bar doesn't open it.
     private let expandDelay: Duration = .milliseconds(90)
@@ -24,7 +24,7 @@ public final class NotchController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
         ))
-        let host = NSHostingView(rootView: NotchView(model: model))
+        let host = NSHostingView(rootView: NotchView(model: model).pointerLocator(PointerLocator(window: panel)))
         host.sizingOptions = []
         panel.contentView = host
     }
@@ -36,16 +36,29 @@ public final class NotchController {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackMouse() }
         }
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.screensChanged() }
+        observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { $0.screensChanged() }
+        observe(NotificationCenter.default, NSWindow.didChangeOcclusionStateNotification, object: panel) {
+            $0.model.isOccluded = !$0.panel.occlusionState.contains(.visible)
         }
+        let workspace = NSWorkspace.shared.notificationCenter
+        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.model.screensAsleep = true }
+        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.model.screensAsleep = false }
+    }
+
+    private func observe(
+        _ center: NotificationCenter, _ name: Notification.Name, object: AnyObject? = nil,
+        _ handler: @escaping @MainActor (NotchController) -> Void
+    ) {
+        let token = center.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { if let self { handler(self) } }
+        }
+        observers.append((center, token))
     }
 
     public func stop() {
         globalMonitor.map(NSEvent.removeMonitor)
-        screenObserver.map(NotificationCenter.default.removeObserver)
+        for (center, token) in observers { center.removeObserver(token) }
+        observers.removeAll()
         hoverPoll?.cancel()
         pendingModeChange?.cancel()
         panel.orderOut(nil)
@@ -90,7 +103,8 @@ public final class NotchController {
         hit.size.height += 1
         let inside = hit.contains(point)
 
-        panel.ignoresMouseEvents = !inside
+        // Runs on every mouse move system-wide; only touch the window server when it changes.
+        if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
         if inside { startHoverPoll() } else { stopHoverPoll() }
 
         guard inside != model.isHovering else { return }

@@ -1,3 +1,4 @@
+import NocchiCore
 import Observation
 import SwiftUI
 
@@ -17,6 +18,15 @@ public final class NotchModel {
     public var isPinned = false
     /// Debug: outline the interactive area.
     public var showsHitArea = false
+
+    /// Placeholder agents until the Store lands in M3.
+    public var primaryMood: Mood = .idle
+    public var clusterMoods: [Mood] = [.working, .waiting, .done, .sleep]
+
+    /// Faces stop animating while nobody can see them.
+    public var isOccluded = false
+    public var screensAsleep = false
+    var facesPaused: Bool { isOccluded || screensAsleep }
 
     public init(geometry: NotchGeometry) {
         self.geometry = geometry

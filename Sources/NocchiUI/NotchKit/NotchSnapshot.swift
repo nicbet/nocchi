@@ -8,7 +8,7 @@ public enum NotchSnapshot {
     /// Writes `notch-<mode>.png` for every mode into `directory`, on a wallpaper-like backdrop.
     public static func write(to directory: URL, geometry: NotchGeometry, scale: CGFloat = 2) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return try [NotchMode.collapsed, .expanded].map { mode in
+        var urls = try [NotchMode.collapsed, .expanded].map { mode in
             let model = NotchModel(geometry: geometry)
             model.mode = mode
             let size = model.panelSize
@@ -26,6 +26,19 @@ public enum NotchSnapshot {
             try data.write(to: url)
             return url
         }
+        urls.append(try writeGallery(to: directory, scale: scale))
+        return urls
+    }
+
+    static func writeGallery(to directory: URL, scale: CGFloat) throws -> URL {
+        let renderer = ImageRenderer(content: MoodGallery().frame(width: 760))
+        renderer.scale = scale
+        guard let image = renderer.cgImage,
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { throw SnapshotError.renderFailed(.expanded) }
+        let url = directory.appendingPathComponent("mood-gallery.png")
+        try data.write(to: url)
+        return url
     }
 
     enum SnapshotError: Error { case renderFailed(NotchMode) }
