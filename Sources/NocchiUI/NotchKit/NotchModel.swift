@@ -17,7 +17,6 @@ public final class NotchModel {
         didSet {
             guard mode != oldValue else { return }
             notchLog.info("mode: \(String(describing: self.mode), privacy: .public)")
-            if mode == .collapsed { chipsFanned = false }
             beginMorph()
         }
     }
@@ -38,8 +37,6 @@ public final class NotchModel {
     /// The launch greeting is showing.
     public var isGreeting = false
     public var drop: DropState = .none
-    /// The other agents' chips are fanned out (the pointer is over their card).
-    public var chipsFanned = false
     /// Writing a message to an agent from the notch.
     public var prompt: PromptState = .none {
         didSet {
@@ -100,14 +97,6 @@ public final class NotchModel {
     }
 
     // MARK: Metrics
-
-    /// The expanded chips card in screen coordinates.
-    var chipsScreenRect: CGRect {
-        let body = bodySize(for: .expanded)
-        let local = OverviewView.chipsFrame(body: body, notchHeight: geometry.notchSize.height)
-        let bodyRect = geometry.rectHanging(body)
-        return CGRect(x: bodyRect.minX + local.minX, y: bodyRect.maxY - local.maxY, width: local.width, height: local.height)
-    }
 
     /// Width of each side slot next to the notch (left face, right cluster) when collapsed.
     var earWidth: CGFloat { (geometry.notchSize.height * 1.3).rounded() }

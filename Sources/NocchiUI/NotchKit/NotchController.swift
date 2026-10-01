@@ -22,7 +22,6 @@ public final class NotchController {
     private var dragPoll: Task<Void, Never>?
     private var dragChangeCount = 0
     private var dropReset: Task<Void, Never>?
-    private var chipsFold: Task<Void, Never>?
 
     /// Delay before opening on hover, so passing through the menu bar doesn't open it.
     private let expandDelay: Duration = .milliseconds(90)
@@ -286,30 +285,11 @@ public final class NotchController {
         // Runs on every mouse move system-wide; only touch the window server when it changes.
         if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
         if inside { startHoverPoll() } else { stopHoverPoll() }
-        updateChipsFan(point)
 
         guard inside != model.isHovering else { return }
         notchLog.debug("hover: \(inside, privacy: .public)")
         model.isHovering = inside
         scheduleModeChange()
-    }
-
-    /// Fans the chips out while the pointer is over their card; folds them back shortly after it
-    /// leaves, so passing over the edge doesn't flicker.
-    private func updateChipsFan(_ point: CGPoint) {
-        let over = model.mode == .expanded && !model.isMorphing && model.chipsScreenRect.contains(point)
-        if over {
-            chipsFold?.cancel()
-            chipsFold = nil
-            if !model.chipsFanned { model.chipsFanned = true }
-        } else if model.chipsFanned, chipsFold == nil {
-            chipsFold = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(450))
-                guard !Task.isCancelled, let self else { return }
-                model.chipsFanned = false
-                chipsFold = nil
-            }
-        }
     }
 
     private func scheduleModeChange() {
