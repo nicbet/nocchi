@@ -4,7 +4,7 @@ CONFIG ?= debug
 APP    := build/Nocchi.app
 
 .DEFAULT_GOAL := help
-.PHONY: help build release test app run dev stop snapshot live clean
+.PHONY: help build release test app run dev stop snapshot live icon clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -36,6 +36,9 @@ snapshot: build ## Render the notch in each mode to build/snapshots/*.png
 
 live: build ## Render the notch from the real Herdr to build/snapshots/live-*.png
 	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots --live
+
+icon: ## Re-render Resources/AppIcon.icns from the icon design (AppIcon.swift)
+	scripts/make-icon.sh
 
 clean: ## Remove build output
 	swift package clean

@@ -4,18 +4,19 @@ import NocchiCore
 import NocchiHerdr
 import NocchiUI
 
-// Dev tool: `nocchi --render-icon <dir>` writes the app icon variants as 1024 px PNGs.
-if let flag = CommandLine.arguments.firstIndex(of: "--render-icon") {
-    let dir = URL(fileURLWithPath: CommandLine.arguments.dropFirst(flag + 1).first ?? ".")
+// Dev tool: `nocchi --render-iconset <dir>` writes the app icon in every size (see make-icon.sh).
+if let flag = CommandLine.arguments.firstIndex(of: "--render-iconset") {
+    let dir = URL(fileURLWithPath: CommandLine.arguments.dropFirst(flag + 1).first ?? "AppIcon.iconset")
     MainActor.assumeIsolated {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        for variant in AppIcon.Variant.allCases {
-            let url = dir.appending(path: "icon-\(variant.rawValue).png")
-            try? AppIcon.png(variant)?.write(to: url)
-            print(url.path)
+        do {
+            try AppIcon.writeIconset(to: dir)
+            print(dir.path)
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("icon failed: \(error)\n".utf8))
+            exit(1)
         }
     }
-    exit(0)
 }
 
 // Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
