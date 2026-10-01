@@ -1,4 +1,5 @@
 import CoreGraphics
+import NocchiCore
 import Testing
 @testable import NocchiUI
 
@@ -47,4 +48,17 @@ import Testing
         #expect(path.boundingRect.width.rounded() == rect.width)
         #expect(path.boundingRect.height.rounded() == rect.height)
     }
+}
+
+@MainActor
+@Test func chipsCardSitsInTheRightOfTheExpandedNotch() {
+    let geometry = NotchGeometry.make(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
+                                      topLeftArea: CGRect(x: 0, y: 0, width: 663, height: 32),
+                                      topRightArea: CGRect(x: 0, y: 0, width: 663, height: 32), menuBarHeight: 32)
+    let model = NotchModel(geometry: geometry, store: AgentStore())
+    model.mode = .expanded
+    let chips = model.chipsScreenRect
+    #expect(model.hitRect.contains(chips))
+    #expect(chips.minX > geometry.notchCenterX)
+    #expect(chips.maxY < geometry.screenFrame.maxY - geometry.notchSize.height, "below the notch")
 }

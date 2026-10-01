@@ -44,6 +44,12 @@ public enum NotchSnapshot {
             if let primary = store.primary { model.prompt = .composing(primary.ref) }
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
         }
+        // Pointer over the other agents: the chips fan out.
+        do {
+            let model = NotchModel(geometry: geometry, store: previewStore(.showcase))
+            model.chipsFanned = true
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-expanded-fanned.png")))
+        }
         // Everyone else calm: the cluster folds into a pill.
         urls.append(try render(previewStore(.calm), mode: .collapsed, geometry: geometry, scale: scale,
                                to: directory.appendingPathComponent("notch-calm-collapsed.png")))
