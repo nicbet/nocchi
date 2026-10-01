@@ -2,6 +2,7 @@ import AppKit
 import NocchiClaude
 import NocchiCore
 import NocchiHerdr
+import NocchiTerminals
 import NocchiUI
 import ServiceManagement
 
@@ -56,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             tip: "Animate nocchi fully even when Reduce Motion is on in System Settings."))
         launchAtLoginItem.target = self
         menu.addItem(launchAtLoginItem)
+        exactWindowItem.target = self
+        exactWindowItem.toolTip = "Opening an agent raises its exact terminal window or tab. Needs Accessibility permission."
+        menu.addItem(exactWindowItem)
         menu.addItem(.separator())
         menu.addItem(demoMenuItem())
         menu.addItem(debugMenuItem())
@@ -69,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         connectionItem.title = connectionDescription
         launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        exactWindowItem.state = WindowRaiser.isTrusted ? .on : .off
         rebuildScreenMenu()
     }
 
@@ -138,6 +143,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func selectScreen(_ sender: NSMenuItem) {
         NocchiSettings.shared.screenName = sender.representedObject as? String
         notch?.screensChanged()
+    }
+
+    private let exactWindowItem = NSMenuItem(title: "Open the Exact Window…", action: #selector(requestAccessibility), keyEquivalent: "")
+
+    /// Asks for Accessibility (macOS shows its prompt once, then it's System Settings).
+    @objc private func requestAccessibility() {
+        if WindowRaiser.isTrusted {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        } else {
+            WindowRaiser.requestAccess()
+        }
     }
 
     private let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")

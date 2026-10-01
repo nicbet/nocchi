@@ -17,6 +17,8 @@ public final class ClaudeAdapter: AgentAdapter {
     private let leavesHerdrToHerdr: Bool
     /// Where each session's terminal is, for "open".
     private let hosts = Mutex<[String: pid_t]>([:])
+    /// Per session: its folder name, a fallback for finding its window.
+    private let folders = Mutex<[String: String]>([:])
 
     public init(
         registry: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions"),
@@ -84,6 +86,7 @@ public final class ClaudeAdapter: AgentAdapter {
 
     private func publishHosts(_ tracker: ClaudeSessionTracker) {
         hosts.withLock { $0 = tracker.hosts }
+        folders.withLock { folders in folders = tracker.agents.compactMapValues { $0.cwd?.lastPathComponent } }
     }
 
     public func perform(_ action: AgentAction) async throws {
@@ -95,7 +98,9 @@ public final class ClaudeAdapter: AgentAdapter {
                 throw AgentActionError.failed("Couldn't find the terminal running this session")
             }
             let opened = await MainActor.run { NSRunningApplication(processIdentifier: host) }
-            guard let app = opened, await TerminalApps.bringToFront(app) else {
+            // Claude titles its terminal with the session's title; the folder is the fallback.
+            let hints = [ClaudeActivity.latestTitle(session: ref.localID), folders.withLock { $0[ref.localID] }].compactMap { $0 }
+            guard let app = opened, await TerminalApps.bringToFront(app, raising: hints) else {
                 throw AgentActionError.failed("Couldn't bring the terminal forward")
             }
         case .prompt, .start:

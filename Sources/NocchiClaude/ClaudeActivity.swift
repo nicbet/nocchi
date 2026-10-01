@@ -43,6 +43,25 @@ public enum ClaudeActivity {
         return line.isEmpty ? nil : line
     }
 
+    /// The session's latest `ai-title` (what Claude puts in the terminal title), from the end of
+    /// its transcript.
+    public static func latestTitle(session: String, root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/projects")) -> String? {
+        let name = "\(session).jsonl"
+        let projects = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        guard let file = projects.lazy.map({ $0.appending(path: name) }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+              let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        let start = size > 1 << 20 ? size - (1 << 20) : 0
+        guard (try? handle.seek(toOffset: start)) != nil, let data = try? handle.readToEnd() else { return nil }
+        for line in data.split(separator: 0x0A).reversed() where line.count < 4096 {
+            guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                  object["type"] as? String == "ai-title", let title = object["aiTitle"] as? String, !title.isEmpty else { continue }
+            return title
+        }
+        return nil
+    }
+
     static func phrase(_ tool: ToolUse) -> String? {
         let input = tool.input ?? [:]
         func file(_ key: String = "file_path") -> String? {

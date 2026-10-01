@@ -31,6 +31,8 @@ public final class HerdrAdapter: AgentAdapter {
 
     /// Last known status per pane, for refusing prompts to blocked agents.
     private let statuses = Mutex<[String: AgentStatus]>([:])
+    /// Per pane: what finds its terminal window (see `HerdrTracker.windowHints`).
+    private let windowHints = Mutex<[String: [String]]>([:])
 
     public init(
         client: HerdrClient, id: AdapterID = "herdr",
@@ -112,6 +114,7 @@ public final class HerdrAdapter: AgentAdapter {
             herdrLog.info("status \(pane, privacy: .public): \(String(describing: before[pane]), privacy: .public) → \(String(describing: info.status), privacy: .public) via \(Self.describe(events), privacy: .public)")
         }
         statuses.withLock { $0 = tracker.agents.mapValues(\.status) }
+        windowHints.withLock { hints in hints = Dictionary(uniqueKeysWithValues: tracker.agents.keys.map { ($0, tracker.windowHints(for: $0)) }) }
     }
 
     /// Follows events until the stream drops (throws) or the task is cancelled (returns).
@@ -229,7 +232,10 @@ public final class HerdrAdapter: AgentAdapter {
         case .open(let ref):
             try check(ref)
             try await translating(ref) { _ = try await client.send(.focus(pane: ref.localID)) }
-            if await !HerdrTerminal.bringToFront() { throw AgentActionError.failed("Couldn't find the terminal running Herdr") }
+            // Herdr retitles its window for the new workspace a moment after switching.
+            try? await Task.sleep(for: .milliseconds(200))
+            let hints = windowHints.withLock { $0[ref.localID] } ?? []
+            if await !HerdrTerminal.bringToFront(raising: hints) { throw AgentActionError.failed("Couldn't find the terminal running Herdr") }
 
         case .prompt(let ref, let text):
             try check(ref)

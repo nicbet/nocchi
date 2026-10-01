@@ -7,11 +7,12 @@ import NocchiTerminals
 public enum HerdrTerminal {
     /// Brings the terminal running a Herdr client to the front: the one used last, when several
     /// are attached. Returns false if none was found.
+    /// With `hints` (and Accessibility allowed), the window whose title matches comes forward.
     @discardableResult
     @MainActor
-    public static func bringToFront() async -> Bool {
+    public static func bringToFront(raising hints: [String] = []) async -> Bool {
         guard let app = TerminalApps.preferred(await hostApps()) else { return false }
-        return await TerminalApps.bringToFront(app)
+        return await TerminalApps.bringToFront(app, raising: hints)
     }
 
     /// For each Herdr client process, the terminal app it runs in; newest client first, each app

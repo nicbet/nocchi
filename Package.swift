@@ -11,7 +11,7 @@ let package = Package(
         // App shell: lifecycle, notch panel, menu-bar item.
         .executableTarget(
             name: "Nocchi",
-            dependencies: ["NocchiCore", "NocchiHerdr", "NocchiClaude", "NocchiUI"]
+            dependencies: ["NocchiCore", "NocchiHerdr", "NocchiClaude", "NocchiTerminals", "NocchiUI"]
         ),
         // Agent model, AgentAdapter protocol, store and reducer. No UI, no Herdr.
         .target(name: "NocchiCore"),

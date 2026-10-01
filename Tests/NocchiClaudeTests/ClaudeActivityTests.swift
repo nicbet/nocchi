@@ -119,3 +119,14 @@ import Testing
         #expect(await transcripts.newActivity(session: "s") == .init(phrases: [], message: "All tests pass."))
     }
 }
+
+@Test func latestTitleFromTheTranscript() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "nocchi-titles-\(UUID().uuidString)")
+    let project = root.appending(path: "-r-app")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try (#"{"type":"ai-title","aiTitle":"First idea","sessionId":"s"}"# + "\n" + #"{"type":"assistant","message":{"content":[]}}"# + "\n"
+        + #"{"type":"ai-title","aiTitle":"srv-4a777b","sessionId":"s"}"# + "\n").write(to: project.appending(path: "s.jsonl"), atomically: true, encoding: .utf8)
+    #expect(ClaudeActivity.latestTitle(session: "s", root: root) == "srv-4a777b")
+    #expect(ClaudeActivity.latestTitle(session: "missing", root: root) == nil)
+}

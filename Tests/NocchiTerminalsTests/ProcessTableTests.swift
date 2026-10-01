@@ -48,3 +48,21 @@ import Testing
         #expect(ProcessTable.appBundles(in: [table[11]!] + table.ancestors(of: 11)).isEmpty)
     }
 }
+
+@Suite struct WindowMatchTests {
+    @Test func theEarliestHintWins() {
+        let titles = ["macbook.local: Personal", "macbook.local: Work", "~/Scratch — zsh"]
+        #expect(WindowRaiser.bestMatch(titles: titles, hints: ["Work"]) == 1)
+        #expect(WindowRaiser.bestMatch(titles: titles, hints: ["srv-4a777b", "scratch"]) == 2, "falls back to the folder")
+        #expect(WindowRaiser.bestMatch(titles: titles, hints: ["nothing"]) == nil)
+    }
+
+    @Test func claudesTitleGlyphAndCaseDontMatter() {
+        let titles = ["✳ Fix the flaky test", "◐ Notch app with animations"]
+        #expect(WindowRaiser.bestMatch(titles: titles, hints: ["notch app with animations", "nocchi"]) == 1)
+    }
+
+    @Test func tooShortHintsAreIgnored() {
+        #expect(WindowRaiser.bestMatch(titles: ["a b c"], hints: ["a", ""]) == nil)
+    }
+}

@@ -23,6 +23,8 @@ struct HerdrTracker {
     /// frontmost with the pane focused), when Herdr reports any other state, or when the pane goes.
     private(set) var unread: Set<String> = []
     private var tabLabels: [String: String] = [:]
+    private var workspaceLabels: [String: String] = [:]
+    private var paneWorkspaces: [String: String] = [:]
     private var paneTabs: [String: String] = [:]
 
     init(adapter: AdapterID) { self.adapter = adapter }
@@ -40,11 +42,13 @@ struct HerdrTracker {
     /// that finished since the last state we saw (a missed event, or a reconnect).
     mutating func apply(_ snapshot: HerdrSnapshot, now: Date) -> [AgentEvent] {
         for tab in snapshot.tabs { tabLabels[tab.tabID] = tab.label }
+        for workspace in snapshot.workspaces { workspaceLabels[workspace.workspaceID] = workspace.label }
         var next: [String: AgentInfo] = [:]
         var finished: [AgentEvent] = []
         for pane in snapshot.agents {
             let old = agents[pane.paneID]
             if let tab = pane.tabID { paneTabs[pane.paneID] = tab }
+            if let workspace = pane.workspaceID { paneWorkspaces[pane.paneID] = workspace }
             var info = old ?? AgentInfo(ref: ref(pane.paneID), kind: .other("agent"), status: .starting, changedAt: now)
             info.isFocused = snapshot.focusedPaneID.map { $0 == pane.paneID } ?? pane.focused ?? false
             update(&info, from: pane, now: now)
@@ -189,6 +193,14 @@ struct HerdrTracker {
     }
 
     /// Herdr numbers unnamed tabs ("1", "2"); those aren't names.
+    /// What finds the agent's terminal window: Herdr titles it "host: workspace", so the workspace
+    /// label first, then the tab and the agent's title.
+    func windowHints(for pane: String) -> [String] {
+        [paneWorkspaces[pane].flatMap { workspaceLabels[$0] },
+         paneTabs[pane].flatMap { tabLabels[$0] },
+         agents[pane]?.title].compactMap { $0 }.filter { !$0.isEmpty }
+    }
+
     static func name(fromTab label: String) -> String? {
         let label = label.trimmingCharacters(in: .whitespaces)
         return label.isEmpty || label.allSatisfy(\.isNumber) ? nil : label

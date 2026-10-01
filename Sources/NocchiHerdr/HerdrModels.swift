@@ -58,6 +58,18 @@ public struct HerdrSnapshot: Decodable, Hashable, Sendable {
     /// its `agent` is known.
     public var agents: [HerdrPane]
     public var tabs: [Tab]
+    /// Workspace labels: Herdr's window title is "host: workspace", so they find the window.
+    public var workspaces: [Workspace]
+
+    public struct Workspace: Decodable, Hashable, Sendable {
+        public var workspaceID: String
+        public var label: String?
+        private enum CodingKeys: String, CodingKey { case workspaceID = "workspace_id", label }
+        public init(workspaceID: String, label: String?) {
+            self.workspaceID = workspaceID
+            self.label = label
+        }
+    }
 
     public struct Tab: Decodable, Hashable, Sendable {
         public var tabID: String
@@ -69,19 +81,21 @@ public struct HerdrSnapshot: Decodable, Hashable, Sendable {
         }
     }
 
-    public init(focusedPaneID: String? = nil, agents: [HerdrPane], tabs: [Tab] = []) {
+    public init(focusedPaneID: String? = nil, agents: [HerdrPane], tabs: [Tab] = [], workspaces: [Workspace] = []) {
         self.focusedPaneID = focusedPaneID
         self.agents = agents
         self.tabs = tabs
+        self.workspaces = workspaces
     }
 
-    private enum CodingKeys: String, CodingKey { case focusedPaneID = "focused_pane_id", agents, tabs }
+    private enum CodingKeys: String, CodingKey { case focusedPaneID = "focused_pane_id", agents, tabs, workspaces }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         focusedPaneID = try c.decodeIfPresent(String.self, forKey: .focusedPaneID)
         agents = try c.decodeIfPresent([HerdrPane].self, forKey: .agents) ?? []
         tabs = try c.decodeIfPresent([Tab].self, forKey: .tabs) ?? []
+        workspaces = try c.decodeIfPresent([Workspace].self, forKey: .workspaces) ?? []
     }
 }
 
