@@ -39,8 +39,16 @@ public final class NotchModel {
     public var drop: DropState = .none
     /// Writing a message to an agent from the notch.
     public var prompt: PromptState = .none {
-        didSet { if prompt != oldValue { onPromptChange?(prompt) } }
+        didSet {
+            guard prompt != oldValue else { return }
+            if oldValue.target != nil && prompt.target == nil { composerClosedAt = Date() }
+            onPromptChange?(prompt)
+        }
     }
+    /// When the composer last closed. Set before the views update, so the chips coming back can
+    /// wait for the focus card to shrink into place.
+    @ObservationIgnored var composerClosedAt: Date?
+    var composerJustClosed: Bool { composerClosedAt.map { Date().timeIntervalSince($0) < 0.3 } ?? false }
     @ObservationIgnored var onPromptChange: ((PromptState) -> Void)?
     /// Called with the folder when one is dropped on the notch.
     @ObservationIgnored var onDropFolder: ((URL) -> Void)?

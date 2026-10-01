@@ -6,8 +6,6 @@ struct OverviewView: View {
     let model: NotchModel
     /// The focus card grows into the composer and shrinks back.
     @Namespace private var card
-    /// Set when the composer closes: the chips wait until the focus card has shrunk back.
-    @State private var chipsWait = false
 
     /// When the primary agent is in one of these, the expanded notch shows an alert instead.
     static let alertMoods: Set<Mood> = [.waiting, .error, .done]
@@ -34,7 +32,7 @@ struct OverviewView: View {
                     HStack(spacing: 10) {
                         FocusCard(model: model, card: card)
                             .frame(width: (body.width - 36 - 10) * 0.52)
-                        ChipsCard(store: store, waits: chipsWait)
+                        ChipsCard(store: store, waits: model.composerJustClosed)
                     }
                     .transition(.opacity)
                 }
@@ -42,9 +40,7 @@ struct OverviewView: View {
             .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
             .animation(.spring(duration: 0.5, bounce: 0.2), value: model.prompt.target)
-            .onChange(of: model.prompt.target) { old, new in
-                chipsWait = old != nil && new == nil
-            }
+
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
         .frame(width: body.width, height: body.height)
