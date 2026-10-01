@@ -4,6 +4,8 @@ import SwiftUI
 /// Expanded: a focus card for the primary agent (face + step carousel) and chips for the others.
 struct OverviewView: View {
     let model: NotchModel
+    /// The focus card grows into the composer and shrinks back.
+    @Namespace private var card
 
     /// When the primary agent is in one of these, the expanded notch shows an alert instead.
     static let alertMoods: Set<Mood> = [.waiting, .error, .done]
@@ -19,23 +21,23 @@ struct OverviewView: View {
             Color.clear.frame(height: model.geometry.notchSize.height)
             Group {
                 if let target = model.prompt.target, let entry = store.state.agents[target] {
-                    Composer(model: model, entry: entry)
-                        .transition(.blurReplace)
+                    Composer(model: model, entry: entry, card: card)
+                        .transition(.identity)
                 } else if let alert {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
                         .transition(.blurReplace)
                 } else {
                     HStack(spacing: 10) {
-                        FocusCard(model: model)
+                        FocusCard(model: model, card: card)
                             .frame(width: (body.width - 36 - 10) * 0.52)
                         ChipsCard(store: store)
                     }
-                    .transition(.blurReplace)
+                    .transition(.opacity)
                 }
             }
             .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
-            .animation(.spring(duration: 0.45, bounce: 0.15), value: model.prompt.target)
+            .animation(.spring(duration: 0.5, bounce: 0.2), value: model.prompt.target)
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
         .frame(width: body.width, height: body.height)
@@ -57,6 +59,7 @@ extension OverviewView {
 /// what it's doing. Click it to open the agent; the bubble button writes to it.
 private struct FocusCard: View {
     let model: NotchModel
+    let card: Namespace.ID
     static let padding: CGFloat = 14
     static let faceSize: CGFloat = 64
     static let faceFrame: CGFloat = 92
@@ -95,7 +98,11 @@ private struct FocusCard: View {
         }
         .padding(.horizontal, Self.padding)
         .frame(maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.white.opacity(0.06))
+                .matchedGeometryEffect(id: "card", in: card)
+        }
     }
 }
 

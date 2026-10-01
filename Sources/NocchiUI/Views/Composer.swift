@@ -2,11 +2,15 @@ import NocchiCore
 import SwiftUI
 
 /// Writing to an agent, across the whole expanded notch: Return sends, Shift-Return starts a new
-/// line, Escape closes.
+/// line, Escape closes. Grows out of the focus card.
 struct Composer: View {
     let model: NotchModel
     let entry: AgentEntry
+    /// Shared with the focus card, whose background grows into this one.
+    let card: Namespace.ID
     @State private var text = ""
+    /// The contents fade in once the card has mostly grown.
+    @State private var shown = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -42,11 +46,6 @@ struct Composer: View {
                         .font(.system(size: 11))
                         .foregroundStyle(FacePalette.body(for: .error).lighter(0.2).color)
                         .lineLimit(1)
-                } else {
-                    Text("Return to send · Shift-Return for a new line · Esc to close")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.35))
-                        .lineLimit(1)
                 }
                 Button {
                     model.sendPrompt(text)
@@ -62,9 +61,17 @@ struct Composer: View {
             }
         }
         .padding(16)
+        .opacity(shown ? 1 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.07)))
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.white.opacity(0.07))
+                .matchedGeometryEffect(id: "card", in: card)
+        }
         .foregroundStyle(.white)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.2).delay(0.18)) { shown = true }
+        }
         .task {
             // The panel becomes key as composing starts; focus once it has.
             try? await Task.sleep(for: .milliseconds(60))
