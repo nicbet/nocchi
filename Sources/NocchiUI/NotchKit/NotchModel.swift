@@ -26,17 +26,16 @@ public final class NotchModel {
     /// Debug: outline the interactive area.
     public var showsHitArea = false
 
-    /// Placeholder agents until the Store lands in M3.
-    public var primaryMood: Mood = .idle
-    public var clusterMoods: [Mood] = [.working, .waiting, .done, .sleep]
+    public let store: AgentStore
 
     /// Faces stop animating while the displays sleep. (Window occlusion isn't used: for a
     /// transparent, always-on-top panel it can report "not visible" while the notch is on screen.)
     public var screensAsleep = false
     var facesPaused: Bool { screensAsleep }
 
-    public init(geometry: NotchGeometry) {
+    public init(geometry: NotchGeometry, store: AgentStore) {
         self.geometry = geometry
+        self.store = store
     }
 
     private func beginMorph() {

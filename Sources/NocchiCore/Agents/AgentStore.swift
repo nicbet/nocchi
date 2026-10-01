@@ -54,7 +54,8 @@ public final class AgentStore {
         runs[ref.adapter]?.adapter.capabilities ?? []
     }
 
-    func apply(_ event: AgentEvent, from adapter: AdapterID) {
+    /// Applies one event. Normally fed by `run(_:)`; public for previews and snapshots.
+    public func apply(_ event: AgentEvent, from adapter: AdapterID) {
         now = Date()
         AgentReducer.reduce(&state, event, from: adapter, now: now)
     }

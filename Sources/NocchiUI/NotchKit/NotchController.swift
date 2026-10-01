@@ -1,4 +1,5 @@
 import AppKit
+import NocchiCore
 import SwiftUI
 
 /// Owns the notch panel: positions it on the right screen, makes it click-through outside the
@@ -18,12 +19,12 @@ public final class NotchController {
     /// Grace period before closing, so small overshoots don't collapse it.
     private let collapseDelay: Duration = .milliseconds(350)
 
-    public init() {
+    public init(store: AgentStore) {
         let screen = NotchGeometry.preferredScreen()
         model = NotchModel(geometry: screen.map(NotchGeometry.init(screen:)) ?? NotchGeometry.make(
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
-        ))
+        ), store: store)
         let host = NSHostingView(rootView: NotchView(model: model).resolvesReduceMotion())
         host.sizingOptions = []
         panel.contentView = host

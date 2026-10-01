@@ -1,3 +1,4 @@
+import NocchiCore
 import AppKit
 import SwiftUI
 
@@ -9,7 +10,7 @@ public enum NotchSnapshot {
     public static func write(to directory: URL, geometry: NotchGeometry, scale: CGFloat = 2) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var urls = try [NotchMode.collapsed, .expanded].map { mode in
-            let model = NotchModel(geometry: geometry)
+            let model = NotchModel(geometry: geometry, store: previewStore(.showcase))
             model.mode = mode
             let size = model.panelSize
             let view = NotchView(model: model)
@@ -40,6 +41,22 @@ public enum NotchSnapshot {
         let url = directory.appendingPathComponent("mood-gallery.png")
         try data.write(to: url)
         return url
+    }
+
+    /// A store holding a scenario's starting agents, with a couple of steps for the carousel.
+    static func previewStore(_ scenario: MockScenario) -> AgentStore {
+        let store = AgentStore()
+        let infos = scenario.agents.map { agent in
+            AgentInfo(ref: AgentRef(adapter: "mock", localID: agent.id), kind: agent.kind, status: agent.status,
+                      name: agent.name, title: agent.title, isFocused: agent.focused, changedAt: Date())
+        }
+        store.apply(.connection(.connected(version: "preview")), from: "mock")
+        store.apply(.snapshot(infos), from: "mock")
+        if let first = infos.first {
+            store.apply(.step(first.ref, "Prep workspace"), from: "mock")
+            store.apply(.step(first.ref, "Copy final outputs"), from: "mock")
+        }
+        return store
     }
 
     enum SnapshotError: Error { case renderFailed(NotchMode) }

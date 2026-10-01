@@ -7,9 +7,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var notch: NotchController?
     private let gallery = MoodGalleryWindow()
+    private let store = AgentStore()
+    /// The running demo scenario, if any. Until the Herdr adapter lands (M4) the demo is the only source.
+    private var demo: MockScenario? = .showcase
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let notch = NotchController()
+        if let demo { store.run(MockAdapter(scenario: demo)) }
+        let notch = NotchController(store: store)
         notch.start()
         self.notch = notch
         statusItem = makeStatusItem()
@@ -34,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ignoreReduceMotion.toolTip = "Animate nocchi fully even when Reduce Motion is on in System Settings."
         menu.addItem(ignoreReduceMotion)
         menu.addItem(.separator())
+        menu.addItem(demoMenuItem())
         menu.addItem(debugMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit \(Nocchi.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -46,6 +51,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sender.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
     }
 
+    // MARK: Demo
+
+    private func demoMenuItem() -> NSMenuItem {
+        let menu = NSMenu()
+        for scenario in MockScenario.all {
+            let item = menu.addItem(withTitle: scenario.name, action: #selector(selectDemo(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = scenario.name
+            item.state = scenario.name == demo?.name ? .on : .off
+        }
+        menu.addItem(.separator())
+        let off = menu.addItem(withTitle: "Off", action: #selector(selectDemo(_:)), keyEquivalent: "")
+        off.target = self
+        off.state = demo == nil ? .on : .off
+
+        let item = NSMenuItem(title: "Demo", action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
+    }
+
+    @objc private func selectDemo(_ sender: NSMenuItem) {
+        demo = MockScenario.all.first { $0.name == sender.representedObject as? String }
+        if let demo {
+            store.run(MockAdapter(scenario: demo))
+        } else {
+            store.stop("mock")
+        }
+        for item in sender.menu?.items ?? [] { item.state = item === sender ? .on : .off }
+    }
+
     // MARK: Debug
 
     private func debugMenuItem() -> NSMenuItem {
@@ -55,17 +90,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Keep Expanded", action: #selector(debugTogglePinned(_:)), keyEquivalent: "p").target = self
         menu.addItem(withTitle: "Show Hit Area", action: #selector(debugToggleHitArea(_:)), keyEquivalent: "h").target = self
         menu.addItem(.separator())
-
-        let moods = NSMenu()
-        for mood in Mood.allCases {
-            let item = moods.addItem(withTitle: mood.rawValue.capitalized, action: #selector(debugSetMood(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mood.rawValue
-            item.state = mood == .idle ? .on : .off
-        }
-        let moodItem = NSMenuItem(title: "Primary Mood", action: nil, keyEquivalent: "")
-        moodItem.submenu = moods
-        menu.addItem(moodItem)
         menu.addItem(withTitle: "Mood Gallery…", action: #selector(debugShowGallery), keyEquivalent: "g").target = self
 
         let item = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
@@ -80,12 +104,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let notch else { return }
         notch.setPinned(!notch.model.isPinned)
         sender.state = notch.model.isPinned ? .on : .off
-    }
-
-    @objc private func debugSetMood(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let mood = Mood(rawValue: raw) else { return }
-        notch?.model.primaryMood = mood
-        for item in sender.menu?.items ?? [] { item.state = item === sender ? .on : .off }
     }
 
     @objc private func debugShowGallery() { gallery.show() }
