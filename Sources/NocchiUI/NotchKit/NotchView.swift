@@ -4,7 +4,7 @@ import SwiftUI
 /// The notch itself, drawn at the top center of the (larger, transparent) panel.
 struct NotchView: View {
     let model: NotchModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.nocchiReducesMotion) private var reduceMotion
 
     var body: some View {
         let size = model.shapeSize(for: model.mode)

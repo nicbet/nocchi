@@ -80,7 +80,7 @@ public final class MoodGalleryWindow {
             )
             window.title = "nocchi — Mood Gallery"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: MoodGallery())
+            window.contentView = NSHostingView(rootView: MoodGallery().resolvesReduceMotion())
             window.center()
             self.window = window
         }

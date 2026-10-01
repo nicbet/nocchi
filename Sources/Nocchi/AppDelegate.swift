@@ -28,11 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         title.isEnabled = false
         menu.addItem(title)
         menu.addItem(.separator())
+        let ignoreReduceMotion = NSMenuItem(title: "Ignore Reduce Motion", action: #selector(toggleIgnoreReduceMotion(_:)), keyEquivalent: "")
+        ignoreReduceMotion.target = self
+        ignoreReduceMotion.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
+        ignoreReduceMotion.toolTip = "Animate nocchi fully even when Reduce Motion is on in System Settings."
+        menu.addItem(ignoreReduceMotion)
+        menu.addItem(.separator())
         menu.addItem(debugMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit \(Nocchi.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
         return item
+    }
+
+    @objc private func toggleIgnoreReduceMotion(_ sender: NSMenuItem) {
+        NocchiSettings.shared.ignoresReduceMotion.toggle()
+        sender.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
     }
 
     // MARK: Debug

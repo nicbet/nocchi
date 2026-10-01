@@ -12,7 +12,7 @@ public struct FaceView: View {
     @Environment(\.facesPaused) private var paused
     @Environment(\.faceFrameRate) private var frameRate
     @Environment(\.facesRenderStill) private var renderStill
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.nocchiReducesMotion) private var reduceMotion
 
     /// The canvas extends past the face so accessories aren't clipped.
     static let canvasScale: CGFloat = 1.8

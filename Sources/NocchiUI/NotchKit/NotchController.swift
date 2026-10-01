@@ -24,7 +24,7 @@ public final class NotchController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
         ))
-        let host = NSHostingView(rootView: NotchView(model: model))
+        let host = NSHostingView(rootView: NotchView(model: model).resolvesReduceMotion())
         host.sizingOptions = []
         panel.contentView = host
     }
