@@ -133,7 +133,7 @@ public final class HerdrAdapter: AgentAdapter {
         }
         let presence = Task { [watchesTerminal] in
             guard watchesTerminal else { return }
-            for await frontmost in await TerminalPresence.updates() { sink.yield(.terminal(frontmost: frontmost)) }
+            for await frontmost in await HerdrTerminal.frontmostUpdates() { sink.yield(.terminal(frontmost: frontmost)) }
         }
         defer {
             presence.cancel()

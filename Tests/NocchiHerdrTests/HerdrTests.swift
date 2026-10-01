@@ -1,5 +1,6 @@
 import Foundation
 import NocchiCore
+import NocchiTerminals
 import Testing
 @testable import NocchiHerdr
 
@@ -87,17 +88,15 @@ import Testing
 }
 
 @Test func findsHerdrClientsButNotServers() {
-    let table = HerdrTerminal.parse("""
-          1     0 /sbin/launchd
-       2418     1 /Applications/Ghostty.app/Contents/MacOS/ghostty
-       2632  2422 herdr
-       2633  2632 /Users/me/.local/bin/herdr server
-       2700  2422 herdr --session work
+    let table = ProcessTable.parse("""
+          1     0 ??       /sbin/launchd
+       2418     1 ??       /Applications/Ghostty.app/Contents/MacOS/ghostty
+       2632  2422 ttys003  herdr
+       2633  2632 ??       /Users/me/.local/bin/herdr server
+       2700  2422 ttys004  herdr --session work
     """)
-    #expect(table.count == 5)
-    #expect(table[2632]?.isHerdr == true)
-    #expect(table[2632]?.isServer == false)
-    #expect(table[2633]?.isServer == true)
-    #expect(table[2700]?.isServer == false)
-    #expect(table[2418]?.isHerdr == false)
+    #expect(HerdrTerminal.isClient(table[2632]!))
+    #expect(!HerdrTerminal.isClient(table[2633]!))
+    #expect(HerdrTerminal.isClient(table[2700]!))
+    #expect(!HerdrTerminal.isClient(table[2418]!))
 }
