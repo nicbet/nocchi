@@ -129,28 +129,30 @@ private struct StepCarousel: View {
                 .lineLimit(1)
             }
             if resting {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "folder").font(.system(size: 10, weight: .semibold)).frame(width: 14)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.info.displayName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                        if let task = entry.info.title, !task.isEmpty, task != entry.info.displayName {
-                            Text(task)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
+                // Project (secondary), task (primary), last message (secondary): one line each.
+                let task = entry.info.title.flatMap { $0.isEmpty || $0 == entry.info.displayName ? nil : $0 }
+                if task != nil {
+                    row(entry.info.displayName, id: "project") {
+                        Image(systemName: "folder").font(.system(size: 10, weight: .semibold))
                     }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.42))
                     .lineLimit(1)
                 }
-                .foregroundStyle(.white.opacity(0.7))
+                row(task ?? entry.info.displayName, id: "task") {
+                    Image(systemName: mood.symbol).font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(mood.tint)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
                 if let said = entry.lastMessage {
                     row(said, id: "said") {
                         Image(systemName: "text.bubble").font(.system(size: 10, weight: .semibold))
                     }
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.42))
-                    .lineLimit(2)
+                    .lineLimit(1)
                 }
             } else {
                 row(entry.headline(mood), id: "headline") {
