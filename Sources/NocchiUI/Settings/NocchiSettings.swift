@@ -27,6 +27,16 @@ public final class NocchiSettings {
         didSet { defaults.set(showsStatusText, forKey: Keys.showsStatusText) }
     }
 
+    /// Play a short system sound when an agent needs you, failed or finished.
+    public var playsSounds: Bool {
+        didSet { defaults.set(playsSounds, forKey: Keys.playsSounds) }
+    }
+
+    /// The screen to show the notch on, by name; nil picks the one with a notch, else the main one.
+    public var screenName: String? {
+        didSet { defaults.set(screenName, forKey: Keys.screenName) }
+    }
+
     /// A named Herdr session to watch instead of the default one.
     public var herdrSession: String? {
         didSet { defaults.set(herdrSession, forKey: Keys.herdrSession) }
@@ -42,6 +52,8 @@ public final class NocchiSettings {
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
         autoPeek = defaults.object(forKey: Keys.autoPeek) as? Bool ?? true
         showsStatusText = defaults.object(forKey: Keys.showsStatusText) as? Bool ?? true
+        playsSounds = defaults.bool(forKey: Keys.playsSounds)
+        screenName = defaults.string(forKey: Keys.screenName)
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
@@ -50,6 +62,8 @@ public final class NocchiSettings {
         static let ignoresReduceMotion = "ignoresReduceMotion"
         static let autoPeek = "autoPeek"
         static let showsStatusText = "showsStatusText"
+        static let playsSounds = "playsSounds"
+        static let screenName = "screenName"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
     }

@@ -2,6 +2,7 @@ import AppKit
 import NocchiCore
 import NocchiHerdr
 import NocchiUI
+import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -41,21 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         connectionItem.isEnabled = false
         menu.addItem(connectionItem)
         menu.addItem(.separator())
-        let ignoreReduceMotion = NSMenuItem(title: "Ignore Reduce Motion", action: #selector(toggleIgnoreReduceMotion(_:)), keyEquivalent: "")
-        ignoreReduceMotion.target = self
-        ignoreReduceMotion.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
-        ignoreReduceMotion.toolTip = "Animate nocchi fully even when Reduce Motion is on in System Settings."
-        menu.addItem(ignoreReduceMotion)
-        let autoPeek = NSMenuItem(title: "Peek When Agents Need You", action: #selector(toggleAutoPeek(_:)), keyEquivalent: "")
-        autoPeek.target = self
-        autoPeek.state = NocchiSettings.shared.autoPeek ? .on : .off
-        autoPeek.toolTip = "Open the notch for a moment when an agent needs you, failed or finished."
-        menu.addItem(autoPeek)
-        let statusText = NSMenuItem(title: "Show Status Text", action: #selector(toggleStatusText(_:)), keyEquivalent: "")
-        statusText.target = self
-        statusText.state = NocchiSettings.shared.showsStatusText ? .on : .off
-        statusText.toolTip = "On screens without a notch, show messages like “Nocchi finished” between the faces."
-        menu.addItem(statusText)
+        menu.addItem(toggle("Peek When Agents Need You", \.autoPeek,
+                            tip: "Open the notch for a moment when an agent needs you, failed or finished."))
+        menu.addItem(toggle("Play Sounds", \.playsSounds, tip: "A short sound when an agent needs you, failed or finished."))
+        menu.addItem(toggle("Show Status Text", \.showsStatusText,
+                            tip: "On screens without a notch, show messages like “Nocchi finished” between the faces."))
+        menu.addItem(.separator())
+        menu.addItem(screenMenuItem)
+        menu.addItem(toggle("Ignore Reduce Motion", \.ignoresReduceMotion,
+                            tip: "Animate nocchi fully even when Reduce Motion is on in System Settings."))
+        launchAtLoginItem.target = self
+        menu.addItem(launchAtLoginItem)
         menu.addItem(.separator())
         menu.addItem(demoMenuItem())
         menu.addItem(debugMenuItem())
@@ -68,6 +65,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         connectionItem.title = connectionDescription
+        launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        rebuildScreenMenu()
+    }
+
+    // MARK: Settings
+
+    private func toggle(_ title: String, _ setting: ReferenceWritableKeyPath<NocchiSettings, Bool>, tip: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(toggleSetting(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = setting
+        item.state = NocchiSettings.shared[keyPath: setting] ? .on : .off
+        item.toolTip = tip
+        return item
+    }
+
+    @objc private func toggleSetting(_ sender: NSMenuItem) {
+        guard let setting = sender.representedObject as? ReferenceWritableKeyPath<NocchiSettings, Bool> else { return }
+        NocchiSettings.shared[keyPath: setting].toggle()
+        sender.state = NocchiSettings.shared[keyPath: setting] ? .on : .off
+    }
+
+    private let screenMenuItem: NSMenuItem = {
+        let item = NSMenuItem(title: "Screen", action: nil, keyEquivalent: "")
+        item.submenu = NSMenu()
+        return item
+    }()
+
+    /// Automatic, then every connected screen.
+    private func rebuildScreenMenu() {
+        guard let menu = screenMenuItem.submenu else { return }
+        menu.removeAllItems()
+        let chosen = NocchiSettings.shared.screenName
+        let automatic = menu.addItem(withTitle: "Automatic", action: #selector(selectScreen(_:)), keyEquivalent: "")
+        automatic.target = self
+        automatic.state = chosen == nil ? .on : .off
+        automatic.toolTip = "The screen with a notch, else the main screen."
+        menu.addItem(.separator())
+        for screen in NSScreen.screens {
+            let item = menu.addItem(withTitle: screen.localizedName, action: #selector(selectScreen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = screen.localizedName
+            item.state = chosen == screen.localizedName ? .on : .off
+        }
+    }
+
+    @objc private func selectScreen(_ sender: NSMenuItem) {
+        NocchiSettings.shared.screenName = sender.representedObject as? String
+        notch?.screensChanged()
+    }
+
+    private let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled { try service.unregister() } else { try service.register() }
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.messageText = "Couldn't change Launch at Login"
+            alert.runModal()
+        }
+        sender.state = service.status == .enabled ? .on : .off
+        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
     private var connectionDescription: String {
@@ -92,21 +152,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let socket = Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)
             store.run(HerdrAdapter(socketPath: socket, revealsTerminal: true))
         }
-    }
-
-    @objc private func toggleStatusText(_ sender: NSMenuItem) {
-        NocchiSettings.shared.showsStatusText.toggle()
-        sender.state = NocchiSettings.shared.showsStatusText ? .on : .off
-    }
-
-    @objc private func toggleAutoPeek(_ sender: NSMenuItem) {
-        NocchiSettings.shared.autoPeek.toggle()
-        sender.state = NocchiSettings.shared.autoPeek ? .on : .off
-    }
-
-    @objc private func toggleIgnoreReduceMotion(_ sender: NSMenuItem) {
-        NocchiSettings.shared.ignoresReduceMotion.toggle()
-        sender.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
     }
 
     // MARK: Demo

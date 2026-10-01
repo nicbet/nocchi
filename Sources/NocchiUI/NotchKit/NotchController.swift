@@ -29,7 +29,7 @@ public final class NotchController {
     private let collapseDelay: Duration = .milliseconds(350)
 
     public init(store: AgentStore) {
-        let screen = NotchGeometry.preferredScreen()
+        let screen = NotchGeometry.preferredScreen(named: NocchiSettings.shared.screenName)
         model = NotchModel(geometry: screen.map(NotchGeometry.init(screen:)) ?? NotchGeometry.make(
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
@@ -103,10 +103,22 @@ public final class NotchController {
             Task { @MainActor in self?.observeMoods() }
         }
         let entered = peekTracker.update(moods)
-        if let first = entered.first { peek(first) }
+        if let first = entered.first {
+            peek(first)
+            if NocchiSettings.shared.playsSounds, !model.isGreeting { Self.sound(for: first.mood)?.play() }
+        }
         for peek in entered {
             guard let entry = store.state.agents[peek.ref] else { continue }
             model.ticker.announce(Ticker.Message(ref: peek.ref, name: entry.info.displayName, mood: peek.mood))
+        }
+    }
+
+    private static func sound(for mood: Mood) -> NSSound? {
+        switch mood {
+        case .waiting: NSSound(named: "Ping")
+        case .error: NSSound(named: "Basso")
+        case .done: NSSound(named: "Glass")
+        default: nil
         }
     }
 
@@ -245,8 +257,9 @@ public final class NotchController {
 
     // MARK: Layout
 
-    private func screensChanged() {
-        guard let screen = NotchGeometry.preferredScreen() else { return }
+    /// Moves the notch to the preferred screen, e.g. after displays change or the setting does.
+    public func screensChanged() {
+        guard let screen = NotchGeometry.preferredScreen(named: NocchiSettings.shared.screenName) else { return }
         model.geometry = NotchGeometry(screen: screen)
         layout()
     }

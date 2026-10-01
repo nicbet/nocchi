@@ -65,9 +65,11 @@ public struct NotchGeometry: Equatable, Sendable {
         )
     }
 
-    /// The screen nocchi lives on: the one with a hardware notch, else the main screen.
+    /// The screen nocchi lives on: the one named `name` if it's connected, else the one with a
+    /// hardware notch, else the main screen.
     @MainActor
-    public static func preferredScreen() -> NSScreen? {
-        NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main ?? NSScreen.screens.first
+    public static func preferredScreen(named name: String? = nil) -> NSScreen? {
+        if let name, let screen = NSScreen.screens.first(where: { $0.localizedName == name }) { return screen }
+        return NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main ?? NSScreen.screens.first
     }
 }
