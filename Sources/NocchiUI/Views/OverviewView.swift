@@ -120,14 +120,6 @@ private struct StepCarousel: View {
         // The face already shows the state.
         let resting = mood == .idle || mood == .sleep
         VStack(alignment: .leading, spacing: 6) {
-            if mood.isBusy, let previous = entry.previousStep {
-                row(previous, id: "previous") {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy))
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.38))
-                .lineLimit(1)
-            }
             if resting {
                 // Project (secondary), task (primary), last message (secondary): one line each.
                 let task = entry.info.title.flatMap { $0.isEmpty || $0 == entry.info.displayName ? nil : $0 }
@@ -149,6 +141,27 @@ private struct StepCarousel: View {
                 if let said = entry.lastMessage {
                     row(said, id: "said") {
                         Image(systemName: "text.bubble").font(.system(size: 10, weight: .semibold))
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(1)
+                }
+            } else if mood.isBusy {
+                // Agent and task (secondary), what it's doing now (primary), the step it just
+                // finished (secondary): one line each.
+                projectRow(lines: 1)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.42))
+                row(entry.headline(mood), id: "now") {
+                    Image(systemName: mood.symbol).font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(mood.tint)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                if let previous = entry.previousStep {
+                    row(previous, id: "previous") {
+                        Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy))
                     }
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.42))

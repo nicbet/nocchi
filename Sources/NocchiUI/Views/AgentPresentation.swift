@@ -27,7 +27,8 @@ extension AgentEntry {
     }
 
     /// The step before it.
-    var previousStep: String? { steps.count >= 2 ? steps[steps.count - 2] : nil }
+    /// The title also lands in the steps; it's shown on its own line, so skip it here.
+    var previousStep: String? { steps.dropLast().last { $0 != info.title } }
 }
 
 extension Mood {

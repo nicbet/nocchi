@@ -50,7 +50,7 @@ import Testing
         try (entry("a.swift") + "\n" + entry("b.swift") + "\n").write(to: file, atomically: true, encoding: .utf8)
 
         let transcripts = ClaudeTranscripts(root: root)
-        #expect(await transcripts.newPhrases(session: "abc") == ["Editing b.swift"])
+        #expect(await transcripts.newPhrases(session: "abc") == ["Editing a.swift", "Editing b.swift"])
         #expect(await transcripts.newPhrases(session: "abc").isEmpty)
 
         let handle = try FileHandle(forWritingTo: file)

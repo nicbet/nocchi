@@ -30,8 +30,8 @@ public actor ClaudeTranscripts {
     }
 
     /// Activity appended to `session`'s transcript since the last call. The first call returns
-    /// only the latest step and message, so an agent shows where it is right away without
-    /// replaying its history.
+    /// only the last two steps (current and previous) and the latest message, so an agent shows
+    /// where it is right away without replaying its history.
     public func newActivity(session: String) -> Activity {
         guard let tail = tails[session] else {
             guard let found = locate(session) else { return Activity() }
@@ -57,8 +57,8 @@ public actor ClaudeTranscripts {
             let start = size > window ? size - window : 0
             guard let (activity, offset) = Self.read(found.url, from: start, skippingFirstLine: start > 0) else { return Activity() }
             tails[session]?.offset = offset
-            if let latest = activity.phrases.last {
-                return Activity(phrases: [latest], message: activity.message)
+            if !activity.phrases.isEmpty {
+                return Activity(phrases: Array(activity.phrases.suffix(2)), message: activity.message)
             }
             if start == 0 || window >= Self.maxWindow { return Activity(message: activity.message) }
             window *= 4
