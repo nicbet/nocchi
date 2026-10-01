@@ -115,11 +115,10 @@ private struct StepCarousel: View {
     let mood: Mood
 
     var body: some View {
-        // Busy: the live step, with the one before it above. Otherwise what it's about: the task.
-        let busy = mood == .working || mood == .thinking || mood == .waiting
-        let headline = busy ? entry.currentStep ?? mood.label : entry.info.title ?? entry.currentStep ?? entry.info.displayName
+        // Busy: the live step, with the one before it above. Otherwise what it last said. The
+        // face already shows the state, so the bottom line names the agent and its task.
         VStack(alignment: .leading, spacing: 6) {
-            if busy, let previous = entry.previousStep {
+            if mood.isBusy, let previous = entry.previousStep {
                 row(previous, id: "previous") {
                     Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy))
                 }
@@ -127,16 +126,16 @@ private struct StepCarousel: View {
                 .foregroundStyle(.white.opacity(0.38))
                 .lineLimit(1)
             }
-            row(headline, id: "headline") {
-                Image(systemName: mood.symbol).font(.system(size: 12, weight: .semibold))
+            row(entry.headline(mood), id: "headline") {
+                Image(systemName: mood.isBusy ? mood.symbol : "text.bubble").font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(mood.tint)
             }
-            .font(.system(size: 15, weight: .semibold))
+            // Live steps are short and bold; a message reads as prose.
+            .font(.system(size: mood.isBusy ? 15 : 13.5, weight: mood.isBusy ? .semibold : .medium))
             .foregroundStyle(.white)
-            .lineLimit(2)
-            row("\(entry.info.displayName) · \(mood.label)", id: "meta") {
-                // A shape's baseline is its bottom: lift it to the middle of the text.
-                Circle().fill(mood.tint).frame(width: 6, height: 6).offset(y: -3)
+            .lineLimit(mood.isBusy ? 2 : 3)
+            row(entry.projectAndTask, id: "meta") {
+                Image(systemName: "folder").font(.system(size: 10, weight: .semibold))
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.42))

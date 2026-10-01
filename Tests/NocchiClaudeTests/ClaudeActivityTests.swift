@@ -78,3 +78,44 @@ import Testing
         #expect(await ClaudeTranscripts(root: root).newPhrases(session: "s") == ["Reading notes.md"])
     }
 }
+
+@Suite struct ClaudeMessageTests {
+    func line(_ text: String, sidechain: Bool = false) -> Data {
+        let json = try! JSONEncoder().encode(text)
+        return Data(#"{"type":"assistant","isSidechain":\#(sidechain),"message":{"content":[{"type":"thinking","thinking":"…"},{"type":"text","text":\#(String(decoding: json, as: UTF8.self))}]}}"#.utf8)
+    }
+
+    @Test func theOpeningLineOfTheLatestText() {
+        let final = "**srv-4a777b is built and ready for your review.** Nothing is committed yet.\n\n## What changed\n- …"
+        #expect(ClaudeActivity.message(forLine: line(final)) == "srv-4a777b is built and ready for your review. Nothing is committed yet.")
+        #expect(ClaudeActivity.message(forLine: line("## Summary\nDone.")) == "Summary")
+        #expect(ClaudeActivity.message(forLine: line("\n\n- Use `make test` first")) == "Use make test first")
+        #expect(ClaudeActivity.message(forLine: line("ignored", sidechain: true)) == nil)
+    }
+
+    @Test func longOpeningsKeepWholeSentences() throws {
+        let text = "The upload endpoint now streams to disk. " + String(repeating: "Lint, unit tests and the full integration run all pass with the race detector on. ", count: 3)
+        let message = try #require(ClaudeActivity.message(forLine: line(text)))
+        #expect(message.count <= 161)
+        #expect(message.hasSuffix("."))
+        #expect(message.hasPrefix("The upload endpoint now streams to disk."))
+    }
+
+    @Test func transcriptsReportTheLatestMessage() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "nocchi-transcripts-\(UUID().uuidString)")
+        let project = root.appending(path: "p")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = project.appending(path: "s.jsonl")
+        let tool = #"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x/a.md"}}]}}"#
+        try (tool + "\n").write(to: file, atomically: true, encoding: .utf8)
+        let transcripts = ClaudeTranscripts(root: root)
+        #expect(await transcripts.newActivity(session: "s") == .init(phrases: ["Reading a.md"], message: nil))
+
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: line("All tests pass.") + Data("\n".utf8))
+        try handle.close()
+        #expect(await transcripts.newActivity(session: "s") == .init(phrases: [], message: "All tests pass."))
+    }
+}

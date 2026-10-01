@@ -10,8 +10,20 @@ extension AgentEntry {
     var currentStep: String? { steps.last ?? info.title }
     /// For a chip: the live step while the agent is busy, else what it's about (its title).
     func chipText(_ mood: Mood) -> String {
-        let busy = mood == .working || mood == .thinking || mood == .waiting
-        return (busy ? currentStep : info.title ?? currentStep) ?? info.displayName
+        (mood.isBusy ? currentStep : info.title ?? currentStep) ?? info.displayName
+    }
+
+    /// The focus card's main line: the live step while busy; otherwise what the agent last said
+    /// (its answer, or its question when it needs you), else its task.
+    func headline(_ mood: Mood) -> String {
+        if mood.isBusy { return currentStep ?? mood.label }
+        return lastMessage ?? info.title ?? currentStep ?? info.displayName
+    }
+
+    /// "Servaint · srv-4a777b": which agent, and its task when that says something more.
+    var projectAndTask: String {
+        guard let task = info.title, !task.isEmpty, task != info.displayName else { return info.displayName }
+        return "\(info.displayName) · \(task)"
     }
 
     /// The step before it.
@@ -19,6 +31,9 @@ extension AgentEntry {
 }
 
 extension Mood {
+    /// Mid-turn: show live steps rather than the last message.
+    var isBusy: Bool { self == .working || self == .thinking }
+
     /// The mood's face color, for tints and glows around the face.
     var tint: Color { FacePalette.body(for: self).color }
 

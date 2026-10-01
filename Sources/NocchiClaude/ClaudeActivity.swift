@@ -12,6 +12,37 @@ public enum ClaudeActivity {
         return entry.message?.content?.compactMap(\.toolUse).last.flatMap(phrase)
     }
 
+    /// The opening of the agent's text on `line`, cleaned of markdown: the line it starts with,
+    /// cut to its first sentence when long. Nil if the line has no main-thread text.
+    public static func message(forLine line: Data) -> String? {
+        guard let entry = try? JSONDecoder().decode(Entry.self, from: line),
+              entry.type == "assistant", entry.isSidechain != true,
+              let text = entry.message?.content?.compactMap(\.text).last else { return nil }
+        return opening(of: text)
+    }
+
+    static func opening(of text: String) -> String? {
+        let firstLine = text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && !$0.hasPrefix("```") }
+        guard var line = firstLine else { return nil }
+        for prefix in ["#### ", "### ", "## ", "# ", "- ", "* ", "> "] where line.hasPrefix(prefix) {
+            line.removeFirst(prefix.count)
+        }
+        for marker in ["**", "__", "`"] { line = line.replacingOccurrences(of: marker, with: "") }
+        // Long: keep whole sentences that fit.
+        let limit = 160
+        if line.count > limit {
+            let head = String(line.prefix(limit))
+            if let end = head.range(of: ". ", options: .backwards) {
+                line = String(head[..<end.lowerBound]) + "."
+            } else {
+                line = head + "…"
+            }
+        }
+        return line.isEmpty ? nil : line
+    }
+
     static func phrase(_ tool: ToolUse) -> String? {
         let input = tool.input ?? [:]
         func file(_ key: String = "file_path") -> String? {
@@ -65,14 +96,20 @@ public enum ClaudeActivity {
 
     struct Content: Decodable {
         var toolUse: ToolUse?
+        var text: String?
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            guard try c.decodeIfPresent(String.self, forKey: .type) == "tool_use" else { return }
+            let type = try c.decodeIfPresent(String.self, forKey: .type)
+            if type == "text" {
+                text = try c.decodeIfPresent(String.self, forKey: .text)
+                return
+            }
+            guard type == "tool_use" else { return }
             let input = try? c.decodeIfPresent(Input.self, forKey: .input)
             toolUse = ToolUse(name: try c.decode(String.self, forKey: .name), input: input?.strings)
         }
-        private enum CodingKeys: String, CodingKey { case type, name, input }
+        private enum CodingKeys: String, CodingKey { case type, name, input, text }
     }
 
     struct ToolUse {

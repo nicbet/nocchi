@@ -69,7 +69,8 @@ struct AlertView: View {
 
     private var detail: String? {
         if case .error(let message) = entry.info.status, let message { return message }
-        return entry.currentStep
+        // What it said: the result when done, the question when it needs you.
+        return entry.lastMessage ?? entry.currentStep
     }
 }
 

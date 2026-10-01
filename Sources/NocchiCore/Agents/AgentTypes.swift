@@ -122,6 +122,9 @@ public enum AgentEvent: Hashable, Sendable {
     case turnFinished(AgentRef)
     /// Fine-grained progress ("Editing Model.swift"), for adapters with `.steps`.
     case step(AgentRef, String)
+    /// The agent's latest message to the user: its answer when a turn ends, or its question when
+    /// it needs you (adapters with `.steps`).
+    case message(AgentRef, String)
 }
 
 public enum AgentAction: Hashable, Sendable {

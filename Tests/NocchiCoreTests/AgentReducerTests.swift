@@ -143,6 +143,12 @@ func reduce(_ events: [AgentEvent], from adapter: AdapterID = mock, into state: 
         #expect(urgent.primary(at: t0, preferring: ref("c"))?.ref == ref("a"))
     }
 
+    @Test func messagesAreKeptPerAgent() {
+        let state = reduce([.snapshot([agent("a", .working)]), .message(ref("a"), "All done."), .message(ref("x"), "ignored")])
+        #expect(state.agents[ref("a")]?.lastMessage == "All done.")
+        #expect(state.agents[ref("x")] == nil)
+    }
+
     @Test func noAgentsNoPrimary() {
         #expect(AgentsState().primary(at: t0) == nil)
     }

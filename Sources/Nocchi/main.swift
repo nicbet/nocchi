@@ -32,8 +32,12 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
             activity.stop()
+            // `--select <pane>` renders that agent as the primary.
+            if let flag = CommandLine.arguments.firstIndex(of: "--select"), CommandLine.arguments.indices.contains(flag + 1) {
+                store.select(AgentRef(adapter: "herdr", localID: CommandLine.arguments[flag + 1]))
+            }
             for entry in store.state.agents.values.sorted(by: { $0.slot < $1.slot }) {
-                print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.steps.joined(separator: " → "))\(entry.info.isFocused ? " [focused]" : "")")
+                print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.steps.last ?? "") | msg: \(entry.lastMessage ?? "-")\(entry.info.isFocused ? " [focused]" : "")")
             }
             print(store.state.connections)
             finish { try NotchSnapshot.writeLive(store, to: URL(fileURLWithPath: dir), geometry: geometry) }

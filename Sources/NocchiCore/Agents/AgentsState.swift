@@ -10,6 +10,8 @@ public struct AgentEntry: Hashable, Sendable {
     public var celebratingUntil: Date?
     /// Stable position among the other agents, assigned on arrival.
     public var slot: Int
+    /// The agent's latest message to the user, from `.message` events.
+    public var lastMessage: String?
 
     public var ref: AgentRef { info.ref }
 
@@ -124,6 +126,9 @@ public enum AgentReducer {
 
         case .turnFinished(let ref):
             state.agents[ref]?.celebratingUntil = now.addingTimeInterval(AgentsState.celebrationDuration)
+
+        case .message(let ref, let text):
+            state.agents[ref]?.lastMessage = text
 
         case .step(let ref, let step):
             guard var entry = state.agents[ref] else { return }
