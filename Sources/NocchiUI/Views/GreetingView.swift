@@ -26,6 +26,8 @@ enum GreetingTimeline {
     static let tuck = 2.4...2.8
     /// The face settles into idle with a small hop, then the notch collapses to its idle pill.
     static let settle = 2.7...3.2
+    /// Meanwhile it slides left and shrinks a little, to where the face sits in the overview.
+    static let home = 2.7...3.2
     static let glowFade = 2.8...3.4
     /// How long the face rests in idle after settling, before the notch collapses.
     static let idleHold = 1.0
@@ -64,9 +66,10 @@ struct GreetingView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: model.geometry.notchSize.height)
             TimelineView(.animation(paused: reduceMotion)) { timeline in
-                GreetingScene(t: reduceMotion ? GreetingTimeline.stillPose : timeline.date.timeIntervalSince(start))
+                GreetingScene(t: reduceMotion ? GreetingTimeline.stillPose : timeline.date.timeIntervalSince(start),
+                              homeX: OverviewView.focusFaceX(bodyWidth: body.width))
             }
-            .padding(EdgeInsets(top: 8, leading: 18, bottom: 16, trailing: 18))
+            .padding(EdgeInsets(top: 8, leading: OverviewView.gutter, bottom: 16, trailing: OverviewView.gutter))
         }
         .frame(width: body.width, height: body.height)
     }
@@ -75,9 +78,17 @@ struct GreetingView: View {
 /// One frame of the greeting at time `t`. Separate from the clock so snapshots can render any moment.
 struct GreetingScene: View {
     let t: Double
+    /// Where the face ends up, as an offset from the card's center: its spot in the overview.
+    var homeX: CGFloat = 0
 
     var body: some View {
         let glow = GreetingTimeline.glow(t)
+        // A gentle float and tilt throughout, so the face looks alive.
+        let float = CGSize(width: sin(t * 2 * .pi * 0.45) * 3, height: sin(t * 2 * .pi * 0.9) * 3)
+        let tilt = sin(t * 2 * .pi * 0.6 + 1) * 4
+        let homing = CGFloat(GreetingTimeline.progress(t, GreetingTimeline.home))
+        let home = homeX * homing
+        let shrink: CGFloat = 1 + (OverviewView.focusFaceSize / WavingFace.size - 1) * homing
         let card = CardShape(open: 0.3 + 0.7 * GreetingTimeline.progress(t, GreetingTimeline.open))
         ZStack {
             // Rendered offscreen at full size: drawn directly, the live notch clipped the sparks
@@ -85,11 +96,14 @@ struct GreetingScene: View {
             Sparks(t: t).drawingGroup().allowsHitTesting(false)
             // The glow is a background so its size doesn't stretch the card.
             WavingFace(t: t)
+                .scaleEffect(shrink)
+                .rotationEffect(.degrees(tilt))
                 .background {
                     RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.6).opacity(0.45 * glow), .clear],
                                    center: .center, startRadius: 10, endRadius: 130)
                         .frame(width: 280, height: 280)
                 }
+                .offset(x: home + float.width, y: float.height)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(card.fill(.white.opacity(0.04)))
@@ -110,7 +124,7 @@ private struct CardShape: Shape {
 /// The face with two small hands. The hands pop out from below (the face squashes as they do),
 /// the right one waves (faster for the goodbye) and the left bobs; then both tuck into the face
 /// and it hops into idle.
-private struct WavingFace: View {
+struct WavingFace: View {
     let t: Double
     static let size: CGFloat = 70
 

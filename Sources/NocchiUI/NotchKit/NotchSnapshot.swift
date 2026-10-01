@@ -51,7 +51,8 @@ public enum NotchSnapshot {
                 ForEach(times, id: \.self) { t in
                     HStack {
                         Text(String(format: "%.1f s", t)).font(.caption.monospaced()).foregroundStyle(.white).frame(width: 50)
-                        GreetingScene(t: t).frame(width: 600, height: 144)
+                        GreetingScene(t: t, homeX: OverviewView.focusFaceX(bodyWidth: 640))
+                            .frame(width: 604, height: 144)
                     }
                 }
             }

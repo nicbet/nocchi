@@ -6,6 +6,7 @@ import Testing
         let lastSparkDies = GreetingTimeline.emitEnd + GreetingTimeline.pulseTravel
         #expect(lastSparkDies <= GreetingTimeline.duration)
         #expect(GreetingTimeline.settle.upperBound + GreetingTimeline.idleHold <= GreetingTimeline.duration)
+        #expect(GreetingTimeline.home.upperBound + GreetingTimeline.idleHold <= GreetingTimeline.duration)
         #expect(GreetingTimeline.glowFade.upperBound <= GreetingTimeline.duration)
     }
 

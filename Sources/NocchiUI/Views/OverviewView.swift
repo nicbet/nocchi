@@ -29,7 +29,7 @@ struct OverviewView: View {
                     .transition(.blurReplace)
                 }
             }
-            .padding(EdgeInsets(top: 8, leading: 18, bottom: 16, trailing: 18))
+            .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
@@ -38,16 +38,29 @@ struct OverviewView: View {
     }
 }
 
+extension OverviewView {
+    static let gutter: CGFloat = 18
+
+    /// Center of the focus card's face, as an offset from the center of a body `bodyWidth` wide.
+    static func focusFaceX(bodyWidth: CGFloat) -> CGFloat {
+        gutter + FocusCard.padding + FocusCard.faceFrame / 2 - bodyWidth / 2
+    }
+    static var focusFaceSize: CGFloat { FocusCard.faceSize }
+}
+
 /// The primary agent: big face with a glow in its mood color, and what it's doing.
 private struct FocusCard: View {
     let store: AgentStore
+    static let padding: CGFloat = 14
+    static let faceSize: CGFloat = 64
+    static let faceFrame: CGFloat = 92
 
     var body: some View {
         let primary = store.primary
         let mood = primary.map(store.mood(of:)) ?? store.emptyMood
         HStack(spacing: 14) {
-            FaceView(mood: mood, size: 64, seed: primary?.faceSeed ?? 0.37)
-                .frame(width: 92, height: 92)
+            FaceView(mood: mood, size: Self.faceSize, seed: primary?.faceSeed ?? 0.37)
+                .frame(width: Self.faceFrame, height: Self.faceFrame)
                 .background {
                     RadialGradient(colors: [mood.tint.opacity(0.45), .clear], center: .center, startRadius: 10, endRadius: 70)
                         .frame(width: 150, height: 150)
@@ -64,7 +77,7 @@ private struct FocusCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Self.padding)
         .frame(maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
     }
