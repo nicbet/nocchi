@@ -99,7 +99,8 @@ private struct AlertGlow: View {
     }
 }
 
-/// The other agents as a small stack of faces.
+/// The other agents as a small stack of faces. Click one to show it instead (another finished
+/// result, or back to the overview with that agent).
 private struct OthersColumn: View {
     let store: AgentStore
     let excluding: AgentRef
@@ -110,7 +111,10 @@ private struct OthersColumn: View {
             VStack(spacing: 4) {
                 ForEach(others.filter { $0.ref != excluding }, id: \.ref) { other in
                     FaceView(mood: store.mood(of: other), size: 18, seed: other.faceSeed)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 24, height: 24)
+                        .onAgentClick(help: "Show \(other.info.displayName): \(store.mood(of: other).label)") {
+                            store.select(other.ref)
+                        }
                 }
                 if !hidden.isEmpty {
                     OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: 18)

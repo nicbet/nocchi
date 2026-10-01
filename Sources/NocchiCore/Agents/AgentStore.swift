@@ -17,19 +17,22 @@ public final class AgentStore {
     /// Chosen in nocchi (a chip click). Shown as the primary face unless something is urgent.
     /// Local on purpose: selecting doesn't switch panes in the terminal.
     public private(set) var selected: AgentRef?
+    /// When it was selected: anything needing attention after that takes over again.
+    public private(set) var selectedAt: Date = .distantPast
 
-    public var primary: AgentEntry? { state.primary(at: now, preferring: selected) }
-    public var others: [AgentEntry] { state.others(at: now, preferring: selected) }
+    public var primary: AgentEntry? { state.primary(at: now, preferring: selected, selectedAt: selectedAt) }
+    public var others: [AgentEntry] { state.others(at: now, preferring: selected, selectedAt: selectedAt) }
 
     public func select(_ ref: AgentRef?) {
         selected = ref
+        selectedAt = Date()
     }
 
     public func mood(of entry: AgentEntry) -> Mood { entry.mood(at: now) }
 
     /// See `AgentsState.others(at:fitting:)`.
     public func others(fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
-        state.others(at: now, fitting: spots, preferring: selected)
+        state.others(at: now, fitting: spots, preferring: selected, selectedAt: selectedAt)
     }
 
     /// The mood that tints a "+N" summary of `hidden` agents.

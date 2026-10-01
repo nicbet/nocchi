@@ -134,13 +134,22 @@ func reduce(_ events: [AgentEvent], from adapter: AdapterID = mock, into state: 
         #expect(state.mostUrgent(hidden, at: t0)?.ref == ref("b"), "working beats idle")
     }
 
-    @Test func aSelectedAgentIsPrimaryUnlessSomethingIsUrgent() {
+    @Test func aSelectedAgentIsPrimaryUntilSomethingNewNeedsAttention() {
         let calm = reduce([.snapshot([agent("a", .idle, focused: true), agent("b", .working), agent("c", .idle)])])
         #expect(calm.primary(at: t0, preferring: ref("c"))?.ref == ref("c"), "beats the focused one")
         #expect(calm.others(at: t0, preferring: ref("c")).map(\.ref) == [ref("a"), ref("b")])
         #expect(calm.primary(at: t0, preferring: ref("gone"))?.ref == ref("a"), "a vanished selection is ignored")
-        let urgent = reduce([.snapshot([agent("a", .blocked), agent("c", .idle)])])
-        #expect(urgent.primary(at: t0, preferring: ref("c"))?.ref == ref("a"))
+
+        // b and d finished; the user picks the older one, d, from the list.
+        let done = reduce([.snapshot([agent("b", .done, changed: 1), agent("d", .done, changed: 2), agent("c", .idle)])])
+        #expect(done.primary(at: t0)?.ref == ref("d"), "newest first")
+        let clickedAt = t0.addingTimeInterval(5)
+        #expect(done.primary(at: t0, preferring: ref("b"), selectedAt: clickedAt)?.ref == ref("b"), "older results stay reachable")
+        #expect(done.primary(at: t0, preferring: ref("c"), selectedAt: clickedAt)?.ref == ref("c"), "even an idle one")
+
+        // Something new needs attention after the click: it takes over.
+        let later = reduce([.snapshot([agent("b", .done, changed: 1), agent("e", .blocked, changed: 9), agent("c", .idle)])])
+        #expect(later.primary(at: t0, preferring: ref("c"), selectedAt: clickedAt)?.ref == ref("e"))
     }
 
     @Test func messagesAreKeptPerAgent() {

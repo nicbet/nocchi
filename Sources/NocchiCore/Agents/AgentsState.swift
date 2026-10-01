@@ -63,19 +63,24 @@ public struct AgentsState: Hashable, Sendable {
     /// How long the `done` face shows after a turn finishes in a pane that's being looked at.
     public static let celebrationDuration: TimeInterval = 3
 
-    /// The face on the left: the most urgent agent that needs attention, else the one selected in
-    /// nocchi, else the focused one, else the one that changed most recently.
-    public func primary(at now: Date, preferring selected: AgentRef? = nil) -> AgentEntry? {
+    /// The face on the left. The agent selected in nocchi (at `selectedAt`), unless another one
+    /// needs attention *since* then (finished, blocked or failed after the click); else the most
+    /// urgent agent that needs attention; else the focused one; else the most recently changed.
+    public func primary(at now: Date, preferring selected: AgentRef? = nil, selectedAt: Date = .distantPast) -> AgentEntry? {
         let all = Array(agents.values)
-        if let urgent = all.filter(\.needsAttention).min(by: { order($0, $1, now) }) { return urgent }
-        if let selected, let entry = agents[selected] { return entry }
+        let urgent = all.filter(\.needsAttention)
+        if let selected, let entry = agents[selected],
+           !urgent.contains(where: { $0.ref != selected && $0.info.changedAt > selectedAt }) {
+            return entry
+        }
+        if let first = urgent.min(by: { order($0, $1, now) }) { return first }
         if let focused = all.first(where: \.info.isFocused) { return focused }
         return all.max { ($0.info.changedAt, -$0.slot) < ($1.info.changedAt, -$1.slot) }
     }
 
     /// Everyone but the primary, in stable slot order.
-    public func others(at now: Date, preferring selected: AgentRef? = nil) -> [AgentEntry] {
-        let primary = primary(at: now, preferring: selected)?.ref
+    public func others(at now: Date, preferring selected: AgentRef? = nil, selectedAt: Date = .distantPast) -> [AgentEntry] {
+        let primary = primary(at: now, preferring: selected, selectedAt: selectedAt)?.ref
         return agents.values.filter { $0.ref != primary }.sorted { $0.slot < $1.slot }
     }
 
@@ -83,8 +88,8 @@ public struct AgentsState: Hashable, Sendable {
     /// With overflow, the last spot is kept for a "+N" summary of `hidden`, and the shown spots go to
     /// agents that need attention first, so one that needs you is never hidden. Shown agents stay in
     /// slot order; `hidden` is in slot order too.
-    public func others(at now: Date, fitting spots: Int, preferring selected: AgentRef? = nil) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
-        let all = others(at: now, preferring: selected)
+    public func others(at now: Date, fitting spots: Int, preferring selected: AgentRef? = nil, selectedAt: Date = .distantPast) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
+        let all = others(at: now, preferring: selected, selectedAt: selectedAt)
         guard all.count > spots else { return (all, []) }
         let room = max(spots - 1, 0)
         let urgent = all.filter(\.needsAttention).sorted { order($0, $1, now) }
