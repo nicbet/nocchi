@@ -95,3 +95,13 @@ import Testing
         #expect(!moves)
     }
 }
+
+@Suite struct ThinkingFaceTests {
+    @Test func thinkingLooksUp() {
+        for t in stride(from: 0.0, to: 20, by: 0.25) {
+            let p = FaceParams.make(.thinking, t: t, seed: 0.3)
+            #expect(p.gazeBias.dy < -0.8, "always looking up")
+            #expect(p.eyeY < FaceParams.make(.idle, t: t, seed: 0.3).eyeY, "eyes sit higher than idle")
+        }
+    }
+}

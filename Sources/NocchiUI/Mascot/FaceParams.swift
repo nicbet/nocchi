@@ -68,8 +68,11 @@ struct FaceParams: Equatable {
 
         case .thinking:
             p.scale = breathe
+            // Looking up and off to the side, like people do when they think: eyes sit higher and
+            // drift slowly between up-left and up-right.
             p.eyeHeight = 0.2 * blink(t, seed: seed)
-            p.gazeBias = CGVector(dx: 0.8 * sin(tt * 0.9), dy: -0.6 + 0.25 * sin(tt * 1.3))
+            p.eyeY = -0.13
+            p.gazeBias = CGVector(dx: 0.55 * sin(tt * 0.6), dy: -0.85)
             p.gazeWeight = 0
 
         // No nodding or bouncing: the accessory (badge, sparkles, ring, zZz) carries the motion.
