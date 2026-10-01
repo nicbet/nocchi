@@ -48,4 +48,17 @@ extension AgentStore {
         let connected = state.connections.values.contains { if case .connected = $0 { true } else { false } }
         return connected ? .idle : .sleep
     }
+
+    /// Why no source is connected ("Herdr isn't running"), if none is.
+    var unavailableReason: String? {
+        var reason: String?
+        for connection in state.connections.values {
+            switch connection {
+            case .connected: return nil
+            case .unavailable(let why): reason = why
+            case .connecting: break
+            }
+        }
+        return reason
+    }
 }

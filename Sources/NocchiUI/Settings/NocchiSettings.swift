@@ -16,13 +16,27 @@ public final class NocchiSettings {
         didSet { defaults.set(ignoresReduceMotion, forKey: Keys.ignoresReduceMotion) }
     }
 
+    /// A named Herdr session to watch instead of the default one.
+    public var herdrSession: String? {
+        didSet { defaults.set(herdrSession, forKey: Keys.herdrSession) }
+    }
+
+    /// An explicit Herdr socket path; wins over `herdrSession`.
+    public var herdrSocketPath: String? {
+        didSet { defaults.set(herdrSocketPath, forKey: Keys.herdrSocketPath) }
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
+        herdrSession = defaults.string(forKey: Keys.herdrSession)
+        herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
 
     private enum Keys {
         static let ignoresReduceMotion = "ignoresReduceMotion"
+        static let herdrSession = "herdrSession"
+        static let herdrSocketPath = "herdrSocketPath"
     }
 }
 

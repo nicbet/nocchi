@@ -10,23 +10,7 @@ public enum NotchSnapshot {
     public static func write(to directory: URL, geometry: NotchGeometry, scale: CGFloat = 2) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var urls = try [NotchMode.collapsed, .expanded].map { mode in
-            let model = NotchModel(geometry: geometry, store: previewStore(.showcase))
-            model.mode = mode
-            let size = model.panelSize
-            let view = NotchView(model: model)
-                .frame(width: size.width, height: size.height)
-                .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
-                .facesRenderStill()
-
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = scale
-            guard let image = renderer.cgImage else { throw SnapshotError.renderFailed(mode) }
-            let url = directory.appendingPathComponent("notch-\(mode).png")
-            guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
-                throw SnapshotError.renderFailed(mode)
-            }
-            try data.write(to: url)
-            return url
+            try render(previewStore(.showcase), mode: mode, geometry: geometry, scale: scale, to: directory.appendingPathComponent("notch-\(mode).png"))
         }
         do {
             let model = NotchModel(geometry: geometry, store: previewStore(.quiet))
@@ -95,6 +79,32 @@ public enum NotchSnapshot {
               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
         else { throw SnapshotError.renderFailed(.expanded) }
         let url = directory.appendingPathComponent("mood-gallery.png")
+        try data.write(to: url)
+        return url
+    }
+
+    /// Writes `live-<mode>.png` for `store`, e.g. one fed by the real Herdr (`--snapshot <dir> --live`).
+    public static func writeLive(_ store: AgentStore, to directory: URL, geometry: NotchGeometry, scale: CGFloat = 2) throws -> [URL] {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return try [NotchMode.collapsed, .expanded].map { mode in
+            try render(store, mode: mode, geometry: geometry, scale: scale, to: directory.appendingPathComponent("live-\(mode).png"))
+        }
+    }
+
+    private static func render(_ store: AgentStore, mode: NotchMode, geometry: NotchGeometry, scale: CGFloat, to url: URL) throws -> URL {
+        let model = NotchModel(geometry: geometry, store: store)
+        model.mode = mode
+        let size = model.panelSize
+        let view = NotchView(model: model)
+            .frame(width: size.width, height: size.height)
+            .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+            .facesRenderStill()
+
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        guard let image = renderer.cgImage,
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { throw SnapshotError.renderFailed(mode) }
         try data.write(to: url)
         return url
     }

@@ -6,9 +6,10 @@ struct MockContractSubject: AgentAdapterContractSubject {
     func makeAdapter(capabilities: AdapterCapabilities) async throws -> AgentAdapter {
         MockAdapter(capabilities: capabilities, timeScale: 0)
     }
-    func addAgent(_ localID: String, to adapter: AgentAdapter) async throws {
+    func addAgent(to adapter: AgentAdapter) async throws -> String {
         let mock = adapter as! MockAdapter
-        await mock.add(AgentInfo(ref: AgentRef(adapter: mock.id, localID: localID), kind: .claude, status: .idle, changedAt: Date()))
+        await mock.add(AgentInfo(ref: AgentRef(adapter: mock.id, localID: "contract-agent"), kind: .claude, status: .idle, changedAt: Date()))
+        return "contract-agent"
     }
     func removeAgent(_ localID: String, from adapter: AgentAdapter) async throws {
         await (adapter as! MockAdapter).remove(localID)

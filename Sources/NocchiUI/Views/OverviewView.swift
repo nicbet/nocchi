@@ -70,8 +70,9 @@ private struct FocusCard: View {
                 StepCarousel(entry: primary, mood: mood)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("No agents running").font(.system(size: 14, weight: .semibold))
-                    Text(mood == .sleep ? "Waiting for an agent source…" : "Start an agent and it shows up here.")
+                    Text(store.unavailableReason ?? "No agents running").font(.system(size: 14, weight: .semibold))
+                    Text(store.unavailableReason != nil ? "Start it and your agents show up here."
+                        : mood == .sleep ? "Waiting for an agent source…" : "Start an agent and it shows up here.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }

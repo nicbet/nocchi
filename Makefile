@@ -4,7 +4,7 @@ CONFIG ?= debug
 APP    := build/nocchi.app
 
 .DEFAULT_GOAL := help
-.PHONY: help build release test app run dev stop snapshot clean
+.PHONY: help build release test app run dev stop snapshot live clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -15,7 +15,7 @@ build: ## Compile (CONFIG=debug|release, default debug)
 release: ## Build a release nocchi.app
 	scripts/bundle.sh release
 
-test: ## Run all tests
+test: ## Run all tests (Herdr integration tests run when herdr is installed)
 	swift test
 
 app: ## Build nocchi.app (CONFIG=debug|release)
@@ -33,6 +33,9 @@ stop: ## Quit a running nocchi
 
 snapshot: build ## Render the notch in each mode to build/snapshots/*.png
 	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots
+
+live: build ## Render the notch from the real Herdr to build/snapshots/live-*.png
+	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots --live
 
 clean: ## Remove build output
 	swift package clean

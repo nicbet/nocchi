@@ -1,11 +1,11 @@
 import Foundation
 
 /// What every `AgentAdapter` must do, as plain checks that return failure messages. Test targets
-/// run them against each adapter (`MockAdapter` now, `HerdrAdapter` in M4).
+/// run them against each adapter (`MockAdapter`, `HerdrAdapter`).
 public protocol AgentAdapterContractSubject: Sendable {
     func makeAdapter(capabilities: AdapterCapabilities) async throws -> AgentAdapter
-    /// Makes an agent with `localID` appear in the adapter's source.
-    func addAgent(_ localID: String, to adapter: AgentAdapter) async throws
+    /// Makes an agent appear in the adapter's source; returns its `AgentRef.localID`.
+    func addAgent(to adapter: AgentAdapter) async throws -> String
     /// Makes it disappear.
     func removeAgent(_ localID: String, from adapter: AgentAdapter) async throws
     /// Makes the adapter lose and regain its connection to the source.
@@ -39,7 +39,6 @@ public enum AgentAdapterContract {
 
     static func reportsAddedAndRemovedAgents(_ subject: AgentAdapterContractSubject, _ timeout: Duration) async throws -> [String] {
         let adapter = try await subject.makeAdapter(capabilities: .all)
-        let ref = AgentRef(adapter: adapter.id, localID: "contract-agent")
         let recorder = EventRecorder(adapter.events())
         defer { recorder.stop() }
         @Sendable func state(_ events: [AgentEvent]) -> AgentsState {
@@ -49,7 +48,7 @@ public enum AgentAdapterContract {
         }
 
         _ = await recorder.wait(timeout) { $0.count >= 2 }
-        try await subject.addAgent(ref.localID, to: adapter)
+        let ref = AgentRef(adapter: adapter.id, localID: try await subject.addAgent(to: adapter))
         guard state(await recorder.wait(timeout) { state($0).agents[ref] != nil }).agents[ref] != nil else {
             return ["added agent never appeared"]
         }
@@ -91,7 +90,7 @@ public enum AgentAdapterContract {
 }
 
 /// Consumes an event stream in the background so checks can wait on it with a deadline.
-final class EventRecorder: Sendable {
+public final class EventRecorder: Sendable {
     private let storage = Storage()
     private let task: Task<Void, Never>
 
@@ -100,7 +99,7 @@ final class EventRecorder: Sendable {
         func append(_ event: AgentEvent) { events.append(event) }
     }
 
-    init(_ stream: AsyncStream<AgentEvent>) {
+    public init(_ stream: AsyncStream<AgentEvent>) {
         let storage = storage
         task = Task {
             for await event in stream { await storage.append(event) }
@@ -108,7 +107,7 @@ final class EventRecorder: Sendable {
     }
 
     /// Waits until `condition` holds or `timeout` passes; returns the events recorded so far.
-    func wait(_ timeout: Duration, until condition: @Sendable ([AgentEvent]) -> Bool) async -> [AgentEvent] {
+    public func wait(_ timeout: Duration, until condition: @Sendable ([AgentEvent]) -> Bool) async -> [AgentEvent] {
         let deadline = ContinuousClock.now + timeout
         while true {
             let events = await storage.events
@@ -117,5 +116,5 @@ final class EventRecorder: Sendable {
         }
     }
 
-    func stop() { task.cancel() }
+    public func stop() { task.cancel() }
 }

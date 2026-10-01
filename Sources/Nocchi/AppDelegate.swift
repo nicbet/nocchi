@@ -1,18 +1,25 @@
 import AppKit
 import NocchiCore
+import NocchiHerdr
 import NocchiUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var notch: NotchController?
     private let gallery = MoodGalleryWindow()
     private let store = AgentStore()
-    /// The running demo scenario, if any. Until the Herdr adapter lands (M4) the demo is the only source.
-    private var demo: MockScenario? = .showcase
+    /// A demo scenario that replaces Herdr while it runs. `--demo <name>` starts with one.
+    private var demo: MockScenario?
+    private let connectionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let demo { store.run(MockAdapter(scenario: demo)) }
+        let arguments = CommandLine.arguments
+        if let flag = arguments.firstIndex(of: "--demo") {
+            let name = arguments.indices.contains(flag + 1) ? arguments[flag + 1] : MockScenario.showcase.name
+            demo = MockScenario.all.first { $0.name == name } ?? .showcase
+        }
+        startSource()
         let notch = NotchController(store: store)
         notch.start()
         self.notch = notch
@@ -31,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let title = NSMenuItem(title: "\(Nocchi.name) \(Nocchi.version)", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
+        connectionItem.isEnabled = false
+        menu.addItem(connectionItem)
         menu.addItem(.separator())
         let ignoreReduceMotion = NSMenuItem(title: "Ignore Reduce Motion", action: #selector(toggleIgnoreReduceMotion(_:)), keyEquivalent: "")
         ignoreReduceMotion.target = self
@@ -42,8 +51,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(debugMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit \(Nocchi.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.delegate = self
         item.menu = menu
         return item
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        connectionItem.title = connectionDescription
+    }
+
+    private var connectionDescription: String {
+        if let demo { return "Demo: \(demo.name)" }
+        switch store.state.connections["herdr"] {
+        case .connected(let version): return "Herdr \(version ?? "") connected"
+        case .unavailable(let reason): return reason
+        case .connecting, nil: return "Connecting to Herdr…"
+        }
+    }
+
+    // MARK: Source
+
+    /// Herdr, unless a demo is running.
+    private func startSource() {
+        if let demo {
+            store.stop("herdr")
+            store.run(MockAdapter(scenario: demo))
+        } else {
+            store.stop("mock")
+            let settings = NocchiSettings.shared
+            store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        }
     }
 
     @objc private func toggleIgnoreReduceMotion(_ sender: NSMenuItem) {
@@ -62,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.state = scenario.name == demo?.name ? .on : .off
         }
         menu.addItem(.separator())
-        let off = menu.addItem(withTitle: "Off", action: #selector(selectDemo(_:)), keyEquivalent: "")
+        let off = menu.addItem(withTitle: "Off (Herdr)", action: #selector(selectDemo(_:)), keyEquivalent: "")
         off.target = self
         off.state = demo == nil ? .on : .off
 
@@ -73,11 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func selectDemo(_ sender: NSMenuItem) {
         demo = MockScenario.all.first { $0.name == sender.representedObject as? String }
-        if let demo {
-            store.run(MockAdapter(scenario: demo))
-        } else {
-            store.stop("mock")
-        }
+        startSource()
         for item in sender.menu?.items ?? [] { item.state = item === sender ? .on : .off }
     }
 

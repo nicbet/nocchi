@@ -1,22 +1,41 @@
 import AppKit
+import NocchiCore
+import NocchiHerdr
 import NocchiUI
 
-// Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits.
+// Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
+// renders what the real Herdr reports instead of the preview scenarios.
 if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
     let dir = CommandLine.arguments.dropFirst(flag + 1).first ?? "."
+    let live = CommandLine.arguments.contains("--live")
     MainActor.assumeIsolated {
         let geometry = NotchGeometry.preferredScreen().map(NotchGeometry.init(screen:))
             ?? .make(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
                      topLeftArea: CGRect(x: 0, y: 0, width: 663, height: 32),
                      topRightArea: CGRect(x: 0, y: 0, width: 663, height: 32), menuBarHeight: 32)
-        do {
-            for url in try NotchSnapshot.write(to: URL(fileURLWithPath: dir), geometry: geometry) { print(url.path) }
-            exit(0)
-        } catch {
-            FileHandle.standardError.write(Data("snapshot failed: \(error)\n".utf8))
-            exit(1)
+        func finish(_ write: () throws -> [URL]) -> Never {
+            do {
+                for url in try write() { print(url.path) }
+                exit(0)
+            } catch {
+                FileHandle.standardError.write(Data("snapshot failed: \(error)\n".utf8))
+                exit(1)
+            }
+        }
+        guard live else { finish { try NotchSnapshot.write(to: URL(fileURLWithPath: dir), geometry: geometry) } }
+        let store = AgentStore()
+        let settings = NocchiSettings.shared
+        store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            for entry in store.state.agents.values.sorted(by: { $0.slot < $1.slot }) {
+                print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.info.title ?? "")\(entry.info.isFocused ? " [focused]" : "")")
+            }
+            print(store.state.connections)
+            finish { try NotchSnapshot.writeLive(store, to: URL(fileURLWithPath: dir), geometry: geometry) }
         }
     }
+    RunLoop.main.run()  // keeps the main queue on the main thread, unlike dispatchMain()
 }
 
 let app = NSApplication.shared
