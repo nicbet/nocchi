@@ -22,5 +22,6 @@ let package = Package(
 
         .testTarget(name: "NocchiCoreTests", dependencies: ["NocchiCore"]),
         .testTarget(name: "NocchiHerdrTests", dependencies: ["NocchiHerdr"]),
+        .testTarget(name: "NocchiUITests", dependencies: ["NocchiUI"]),
     ]
 )

@@ -4,7 +4,7 @@ CONFIG ?= debug
 APP    := build/nocchi.app
 
 .DEFAULT_GOAL := help
-.PHONY: help build release test app run dev stop clean
+.PHONY: help build release test app run dev stop snapshot clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,6 +30,9 @@ dev: ## Rebuild a debug bundle and relaunch it
 
 stop: ## Quit a running nocchi
 	-pkill -x nocchi
+
+snapshot: build ## Render the notch in each mode to build/snapshots/*.png
+	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots
 
 clean: ## Remove build output
 	swift package clean
