@@ -12,7 +12,7 @@ let package = Package(
         // App shell: lifecycle, notch panel, menu-bar item.
         .executableTarget(
             name: "Nocchi",
-            dependencies: ["NocchiCore", "NocchiHerdr", "NocchiClaude", "NocchiUI"]
+            dependencies: ["NocchiCore", "NocchiHerdr", "NocchiClaude", "NocchiCodex", "NocchiUI"]
         ),
         // Agent model, AgentAdapter protocol, store and reducer. No UI, no Herdr.
         .target(name: "NocchiCore"),
@@ -28,6 +28,8 @@ let package = Package(
         .target(name: "NocchiHerdr", dependencies: ["NocchiCore", "NocchiTerminals"]),
         // What Claude Code agents are doing, read from their session transcripts.
         .target(name: "NocchiClaude", dependencies: ["NocchiCore", "NocchiHooks", "NocchiHookProtocol", "NocchiTerminals"]),
+        // Codex CLI sessions running outside Herdr: processes, rollout logs, hooks.
+        .target(name: "NocchiCodex", dependencies: ["NocchiCore", "NocchiHooks", "NocchiHookProtocol", "NocchiTerminals"]),
         // NotchKit, Mascot and views.
         .target(name: "NocchiUI", dependencies: ["NocchiCore"]),
 
@@ -36,6 +38,7 @@ let package = Package(
         .testTarget(name: "NocchiUITests", dependencies: ["NocchiUI"]),
         .testTarget(name: "NocchiClaudeTests", dependencies: ["NocchiClaude"]),
         .testTarget(name: "NocchiTerminalsTests", dependencies: ["NocchiTerminals"]),
+        .testTarget(name: "NocchiCodexTests", dependencies: ["NocchiCodex"]),
         .testTarget(name: "NocchiHooksTests", dependencies: ["NocchiHooks", "NocchiHookProtocol", "NocchiHook"]),
     ]
 )
