@@ -11,12 +11,15 @@ import Testing
 
     @Test func columnsAndRowsGrowWithTheCount() {
         let shapes = (1...8).map { ClusterLayout.make(count: $0, height: h).map { "\($0.columns)x\($0.rows)" } }
-        #expect(shapes == ["1x1", "1x2", "2x2", "2x2", "2x3", "2x3", "2x3", "2x3"])
+        // Counts are the *other* agents: 1–3 in one column, 4–6 in two.
+        #expect(shapes == ["1x1", "1x2", "1x3", "2x2", "2x3", "2x3", "2x3", "2x3"])
     }
 
     @Test func facesShrinkOnlyAsNeeded() throws {
         let one = try #require(ClusterLayout.make(count: 1, height: h))
         let four = try #require(ClusterLayout.make(count: 4, height: h))
+        let three = try #require(ClusterLayout.make(count: 3, height: h))
+        #expect(3 * three.faceSize + 2 * three.gap <= h, "a column of three fits")
         let six = try #require(ClusterLayout.make(count: 6, height: h))
         #expect(one.faceSize > four.faceSize)
         #expect(four.faceSize > six.faceSize)
