@@ -44,6 +44,28 @@ public enum NotchSnapshot {
                 urls.append(url)
             }
         }
+        do {
+            // Filmstrip of the greeting's choreography.
+            let times = [0.6, 1.6, 2.4, 2.8, 3.2, 3.9]
+            let strip = VStack(spacing: 8) {
+                ForEach(times, id: \.self) { t in
+                    HStack {
+                        Text(String(format: "%.1f s", t)).font(.caption.monospaced()).foregroundStyle(.white).frame(width: 50)
+                        GreetingScene(t: t).frame(width: 600, height: 144)
+                    }
+                }
+            }
+            .padding(12)
+            .background(.black)
+            .facesRenderStill()
+            let renderer = ImageRenderer(content: strip)
+            renderer.scale = scale
+            if let image = renderer.cgImage, let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                let url = directory.appendingPathComponent("greeting-filmstrip.png")
+                try data.write(to: url)
+                urls.append(url)
+            }
+        }
         for scenario in [MockScenario.needsYou, .failure] {
             let model = NotchModel(geometry: geometry, store: previewStore(scenario))
             model.mode = .expanded

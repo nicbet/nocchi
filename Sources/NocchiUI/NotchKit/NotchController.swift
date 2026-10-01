@@ -30,8 +30,8 @@ public final class NotchController {
         panel.contentView = host
     }
 
-    /// How long the launch greeting stays open.
-    private let greetingDuration: Duration = .seconds(3)
+    /// How long the launch greeting stays open: until its choreography has played out.
+    private let greetingDuration: Duration = .seconds(GreetingTimeline.duration)
 
     public func start(greeting: Bool = true) {
         layout()
