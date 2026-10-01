@@ -1,3 +1,4 @@
+import Foundation
 import NocchiCore
 import Observation
 import SwiftUI
@@ -35,6 +36,12 @@ public final class NotchModel {
     public let ticker = Ticker()
     /// The launch greeting is showing.
     public var isGreeting = false
+    public var drop: DropState = .none
+    /// Called with the folder when one is dropped on the notch.
+    @ObservationIgnored var onDropFolder: ((URL) -> Void)?
+
+    /// Stay open regardless of hover.
+    var holdsOpen: Bool { isPinned || drop != .none }
 
     /// Faces stop animating while the displays sleep. (Window occlusion isn't used: for a
     /// transparent, always-on-top panel it can report "not visible" while the notch is on screen.)
@@ -94,4 +101,25 @@ public final class NotchModel {
     }
 
     static let shadowMargin: CGFloat = 40
+}
+
+/// Dragging a folder onto the notch starts an agent there.
+public enum DropState: Equatable, Sendable {
+    case none
+    /// A file drag is near the notch; `isTargeted` while it's over it.
+    case offering(isTargeted: Bool)
+    case starting(folder: URL, since: Date)
+    case started(folder: URL)
+    case failed(folder: URL, message: String)
+
+    /// The folder to start in for a dropped item: itself if it's a folder, else its parent.
+    static func folder(for url: URL) -> URL {
+        let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? url.hasDirectoryPath
+        return isDirectory ? url : url.deletingLastPathComponent()
+    }
+
+    /// The bar's position while an agent starts: eases toward 90 % and waits there for Herdr.
+    static func progress(after seconds: TimeInterval) -> Double {
+        0.9 * (1 - exp(-max(0, seconds) / 2.5))
+    }
 }

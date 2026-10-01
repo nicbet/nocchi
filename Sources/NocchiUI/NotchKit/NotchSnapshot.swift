@@ -25,6 +25,18 @@ public enum NotchSnapshot {
             urls.append(try render(model, mode: .collapsed, scale: scale, to: directory.appendingPathComponent("notch-ticker-long.png")))
             model.ticker.stop()
         }
+        // Dropping a folder: the zone, hovering it, starting (face as the bar's handle), failing.
+        let folder = URL(fileURLWithPath: "/Users/me/Projects/nocchi")
+        let drops: [(String, DropState)] = [
+            ("offering", .offering(isTargeted: false)), ("targeted", .offering(isTargeted: true)),
+            ("starting", .starting(folder: folder, since: Date().addingTimeInterval(-2))),
+            ("failed", .failed(folder: folder, message: "Herdr error agent_pane_busy: pane is busy")),
+        ]
+        for (name, drop) in drops {
+            let model = NotchModel(geometry: geometry, store: previewStore(.quiet))
+            model.drop = drop
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-drop-\(name).png")))
+        }
         // More agents than spots: the overflow badge and chip.
         for mode in [NotchMode.collapsed, .expanded] {
             urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,

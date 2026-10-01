@@ -18,6 +18,10 @@ public final class NotchController {
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var peekTracker = PeekTracker()
     private var peekEnd: Task<Void, Never>?
+    private var mouseDownMonitor: Any?
+    private var dragPoll: Task<Void, Never>?
+    private var dragChangeCount = 0
+    private var dropReset: Task<Void, Never>?
 
     /// Delay before opening on hover, so passing through the menu bar doesn't open it.
     private let expandDelay: Duration = .milliseconds(90)
@@ -30,7 +34,7 @@ public final class NotchController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             safeAreaTop: 0, topLeftArea: nil, topRightArea: nil, menuBarHeight: 24
         ), store: store)
-        let host = FirstClickHostingView(rootView: NotchView(model: model).resolvesReduceMotion())
+        let host = FirstClickHostingView(rootView: NotchView(model: model).acceptsFolderDrops(model).resolvesReduceMotion())
         host.sizingOptions = []
         panel.contentView = host
     }
@@ -43,6 +47,12 @@ public final class NotchController {
         panel.orderFrontRegardless()
         if greeting { greet() }
         observeMoods()
+        model.onDropFolder = { [weak self] url in self?.startAgent(in: url) }
+        // A file drag can't be seen directly from outside the dragging app, so on every press we
+        // watch the drag pasteboard until the button is released.
+        mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            MainActor.assumeIsolated { self?.watchForFileDrag() }
+        }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackMouse() }
@@ -65,6 +75,9 @@ public final class NotchController {
 
     public func stop() {
         globalMonitor.map(NSEvent.removeMonitor)
+        mouseDownMonitor.map(NSEvent.removeMonitor)
+        dragPoll?.cancel()
+        dropReset?.cancel()
         for (center, token) in observers { center.removeObserver(token) }
         observers.removeAll()
         hoverPoll?.cancel()
@@ -95,14 +108,14 @@ public final class NotchController {
     /// Opens the notch for a moment when an agent needs you, failed or finished. The expanded
     /// notch shows the alert for the most urgent agent. Hovering takes over from the timeout.
     private func peek(_ peek: PeekTracker.Peek) {
-        guard NocchiSettings.shared.autoPeek, !model.isGreeting, !model.isPinned, !model.isHovering else { return }
+        guard NocchiSettings.shared.autoPeek, !model.isGreeting, !model.holdsOpen, !model.isHovering else { return }
         notchLog.info("peek: \(peek.ref.description, privacy: .public) \(String(describing: peek.mood), privacy: .public)")
         setMode(.expanded)
         peekEnd?.cancel()
         peekEnd = Task { [weak self] in
             try? await Task.sleep(for: peek.duration)
             guard !Task.isCancelled, let self else { return }
-            if !model.isHovering && !model.isPinned && !model.isGreeting { setMode(.collapsed) }
+            if !model.isHovering && !model.holdsOpen && !model.isGreeting { setMode(.collapsed) }
         }
     }
 
@@ -114,7 +127,85 @@ public final class NotchController {
             try? await Task.sleep(for: self?.greetingDuration ?? .seconds(3))
             guard let self else { return }
             model.isGreeting = false
-            if !model.isHovering && !model.isPinned { setMode(.collapsed) }
+            if !model.isHovering && !model.holdsOpen { setMode(.collapsed) }
+        }
+    }
+
+    // MARK: Drop a folder
+
+    /// Area around the notch where a file drag opens the drop zone.
+    private var dropProximity: CGRect {
+        model.geometry.rectHanging(model.shapeSize(for: .expanded)).insetBy(dx: -80, dy: -80)
+    }
+
+    private func watchForFileDrag() {
+        guard dragPoll == nil, model.store.canStartAgents else { return }
+        dragChangeCount = NSPasteboard(name: .drag).changeCount
+        dragPoll = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(33))
+                guard let self else { return }
+                if NSEvent.pressedMouseButtons & 1 == 0 { return endFileDrag() }
+                updateFileDrag()
+            }
+        }
+    }
+
+    private func updateFileDrag() {
+        let pasteboard = NSPasteboard(name: .drag)
+        guard pasteboard.changeCount != dragChangeCount, pasteboard.types?.contains(.fileURL) == true else { return }
+        let near = dropProximity.contains(NSEvent.mouseLocation)
+        switch model.drop {
+        case .none where near:
+            model.drop = .offering(isTargeted: false)
+            setMode(.expanded)
+        case .offering where !near:
+            model.drop = .none
+            scheduleModeChange()
+        default:
+            break
+        }
+        trackMouse()
+    }
+
+    private func endFileDrag() {
+        dragPoll?.cancel()
+        dragPoll = nil
+        // Released without dropping on the notch.
+        if case .offering = model.drop {
+            model.drop = .none
+            scheduleModeChange()
+        }
+    }
+
+    private func startAgent(in url: URL) {
+        let folder = DropState.folder(for: url)
+        notchLog.info("drop: start claude in \(folder.path, privacy: .public)")
+        model.drop = .starting(folder: folder, since: Date())
+        dropReset?.cancel()
+        dropReset = Task { [weak self] in
+            guard let store = self?.model.store else { return }
+            let result: DropState
+            do {
+                try await store.perform(.start(kind: .claude, cwd: folder))
+                result = .started(folder: folder)
+            } catch {
+                result = .failed(folder: folder, message: Self.describe(error))
+            }
+            guard let self, !Task.isCancelled else { return }
+            model.drop = result
+            try? await Task.sleep(for: result == .started(folder: folder) ? .milliseconds(1500) : .seconds(5))
+            guard !Task.isCancelled else { return }
+            model.drop = .none
+            scheduleModeChange()
+        }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        switch error {
+        case AgentActionError.failed(let message): message
+        case AgentActionError.unsupported: "This agent source can't start agents."
+        default: "\(error)"
         }
     }
 
@@ -169,7 +260,7 @@ public final class NotchController {
 
     private func scheduleModeChange() {
         pendingModeChange?.cancel()
-        let target: NotchMode = (model.isHovering || model.isPinned) ? .expanded : .collapsed
+        let target: NotchMode = (model.isHovering || model.holdsOpen) ? .expanded : .collapsed
         guard target != model.mode else { return }
         let delay = target == .expanded ? expandDelay : collapseDelay
 

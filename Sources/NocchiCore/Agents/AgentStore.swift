@@ -54,10 +54,15 @@ public final class AgentStore {
     public func perform(_ action: AgentAction) async throws {
         let adapterID: AdapterID = switch action {
         case .focus(let ref), .prompt(let ref, _): ref.adapter
-        case .start: runs.keys.first ?? "none"
+        case .start: runs.first { $0.value.adapter.capabilities.contains(.start) }?.key ?? "none"
         }
         guard let adapter = runs[adapterID]?.adapter else { throw AgentActionError.failed("No adapter \(adapterID)") }
         try await adapter.perform(action)
+    }
+
+    /// Whether any running adapter can start new agents.
+    public var canStartAgents: Bool {
+        runs.values.contains { $0.adapter.capabilities.contains(.start) }
     }
 
     public func capabilities(of ref: AgentRef) -> AdapterCapabilities {

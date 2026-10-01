@@ -32,6 +32,7 @@ struct NotchView: View {
         .facesPaused(model.facesPaused)
         .facesRenderStill(renderStill || model.isMorphing)
         .animation(model.mode == .expanded && !reduceMotion ? Self.expandSpring : Self.collapseSpring, value: model.mode)
+        .animation(.spring(duration: 0.4, bounce: 0.15), value: model.drop)
     }
 
     /// Opening can overshoot: the bounce reads as playful.
@@ -46,6 +47,9 @@ struct NotchView: View {
         case .collapsed:
             CollapsedView(model: model)
                 .transition(.blurReplace)
+        case .expanded where model.drop != .none:
+            DropView(model: model)
+                .transition(.blurReplace)
         case .expanded where model.isGreeting:
             GreetingView(model: model)
                 .transition(.blurReplace)
@@ -56,3 +60,35 @@ struct NotchView: View {
     }
 }
 
+
+extension View {
+    /// Folders dropped on the notch go to `model.onDropFolder`. Applied by the live panel only:
+    /// `ImageRenderer` draws drop targets as placeholders.
+    func acceptsFolderDrops(_ model: NotchModel) -> some View {
+        modifier(FolderDrop(model: model))
+    }
+}
+
+private struct FolderDrop: ViewModifier {
+    let model: NotchModel
+
+    func body(content: Content) -> some View {
+        content.onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
+            guard case .offering = model.drop, let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in model.onDropFolder?(url) }
+            }
+            return true
+        }
+    }
+
+    /// Drives the drop zone's highlight while a drag hovers over the notch.
+    private var isTargeted: Binding<Bool> {
+        Binding {
+            if case .offering(let targeted) = model.drop { targeted } else { false }
+        } set: { targeted in
+            if case .offering = model.drop { model.drop = .offering(isTargeted: targeted) }
+        }
+    }
+}
