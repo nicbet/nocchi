@@ -5,6 +5,18 @@ import NocchiCore
 import NocchiHerdr
 import NocchiUI
 
+// Dev tool: `nocchi --render-sounds <dir>` writes nocchi's voice as WAVs to listen to.
+if let flag = CommandLine.arguments.firstIndex(of: "--render-sounds") {
+    let dir = URL(fileURLWithPath: CommandLine.arguments.dropFirst(flag + 1).first ?? ".")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    for voice in NocchiVoice.allCases {
+        let url = dir.appending(path: "\(voice.rawValue).wav")
+        try? voice.wav().write(to: url)
+        print(url.path)
+    }
+    exit(0)
+}
+
 // Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
 // renders what the real Herdr reports instead of the preview scenarios; `--live --source claude`
 // renders what Claude's own session registry reports.
