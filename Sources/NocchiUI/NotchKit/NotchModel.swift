@@ -30,10 +30,10 @@ public final class NotchModel {
     public var primaryMood: Mood = .idle
     public var clusterMoods: [Mood] = [.working, .waiting, .done, .sleep]
 
-    /// Faces stop animating while nobody can see them.
-    public var isOccluded = false
+    /// Faces stop animating while the displays sleep. (Window occlusion isn't used: for a
+    /// transparent, always-on-top panel it can report "not visible" while the notch is on screen.)
     public var screensAsleep = false
-    var facesPaused: Bool { isOccluded || screensAsleep }
+    var facesPaused: Bool { screensAsleep }
 
     public init(geometry: NotchGeometry) {
         self.geometry = geometry

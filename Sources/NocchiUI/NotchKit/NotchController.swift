@@ -37,9 +37,6 @@ public final class NotchController {
             MainActor.assumeIsolated { self?.trackMouse() }
         }
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { $0.screensChanged() }
-        observe(NotificationCenter.default, NSWindow.didChangeOcclusionStateNotification, object: panel) {
-            $0.model.isOccluded = !$0.panel.occlusionState.contains(.visible)
-        }
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.model.screensAsleep = true }
         observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.model.screensAsleep = false }

@@ -85,7 +85,8 @@ final class FaceNSView: NSView {
 
     /// Computes the current frame and redraws only if it differs visibly from the last one.
     private func update(force: Bool) {
-        let now = CACurrentMediaTime()
+        // While paused there are no ticks to play a transition, so show the new mood right away.
+        let now = paused ? CACurrentMediaTime() + FaceMotion.transitionDuration : CACurrentMediaTime()
         let t = Date.timeIntervalSinceReferenceDate
         let params = motion.params(at: now, motionTime: t, seed: seed, reduceMotion: reduceMotion)
         let gaze = FaceMotion.gaze(params, pointer: pointerOffset(), size: size)

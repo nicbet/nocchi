@@ -84,7 +84,10 @@ public final class MoodGalleryWindow {
             window.center()
             self.window = window
         }
+        // nocchi is a background (accessory) app, so plain activation can leave the window
+        // behind the frontmost app's windows. Order it front regardless, then make it key.
+        window?.orderFrontRegardless()
+        window?.makeKey()
         NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
     }
 }
