@@ -3,97 +3,9 @@ import NocchiCore
 import Testing
 @testable import NocchiClaude
 
-@Suite struct ClaudeHookParsingTests {
-    func parse(_ json: String) -> ClaudeHookEvent? { ClaudeHookEvent.parse(Data(json.utf8)) }
-
-    @Test func mapsHookEventsToKinds() {
-        #expect(parse(#"{"session_id":"s","hook_event_name":"SessionStart","source":"startup","cwd":"/r/app","transcript_path":"/t.jsonl"}"#)
-            == ClaudeHookEvent(kind: .sessionStart, sessionID: "s", cwd: "/r/app", transcriptPath: "/t.jsonl"))
-        #expect(parse(#"{"session_id":"s","hook_event_name":"UserPromptSubmit","prompt":"hi"}"#)?.kind == .promptSubmitted)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"PostToolUse","tool_name":"Edit"}"#)?.kind == .toolUsed)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"PermissionRequest","tool_name":"Bash"}"#)?.kind == .needsInput)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"Notification","notification_type":"permission_prompt"}"#)?.kind == .needsInput)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"Notification","notification_type":"idle_prompt"}"#)?.kind == .idleReminder)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"Stop","stop_hook_active":false}"#)?.kind == .stopped)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"StopFailure","error":"rate_limit"}"#)?.kind == .failed("rate_limit"))
-        #expect(parse(#"{"session_id":"s","hook_event_name":"SessionEnd","reason":"logout"}"#)?.kind == .sessionEnd)
-        #expect(parse(#"{"session_id":"s","hook_event_name":"PreCompact"}"#)?.kind == .other)
-        #expect(parse(#"{"hook_event_name":"Stop"}"#) == nil)
-        #expect(parse("nope") == nil)
-    }
-}
-
-@Suite struct ClaudeSessionTrackerTests {
-    let t0 = Date(timeIntervalSince1970: 1_000)
-    let t1 = Date(timeIntervalSince1970: 1_010)
-    func event(_ kind: ClaudeHookEvent.Kind, _ id: String = "s1", pid: Int32? = 42, host: Int32? = 7, herdr: String? = nil) -> ClaudeHookEvent {
-        ClaudeHookEvent(kind: kind, sessionID: id, cwd: "/work/app", processID: pid, hostID: host, herdrPane: herdr)
-    }
-    func status(_ tracker: ClaudeSessionTracker, _ id: String = "s1") -> AgentStatus? { tracker.agents[id]?.status }
-
-    @Test func aTurnFromStartToFinish() {
-        var tracker = ClaudeSessionTracker()
-        let start = tracker.apply(event(.sessionStart), now: t0)
-        guard case .upserted(let info) = start.first else { Issue.record("no agent"); return }
-        #expect(info.ref == AgentRef(adapter: "claude", localID: "s1"))
-        #expect(info.kind == .claude)
-        #expect(info.sessionID == "s1")
-        #expect(info.displayName == "app")
-        #expect(info.status == .idle)
-
-        _ = tracker.apply(event(.promptSubmitted), now: t0)
-        #expect(status(tracker) == .working)
-        _ = tracker.apply(event(.needsInput), now: t0)
-        #expect(status(tracker) == .blocked)
-        _ = tracker.apply(event(.toolUsed), now: t0)
-        #expect(status(tracker) == .working, "approved: back to work")
-        let stop = tracker.apply(event(.stopped), now: t1)
-        #expect(status(tracker) == .done)
-        #expect(stop.contains(.turnFinished(AgentRef(adapter: "claude", localID: "s1"))))
-        #expect(tracker.apply(event(.idleReminder), now: t1).isEmpty, "still unread")
-    }
-
-    @Test func doneIsSeenWhenItsTerminalComesToTheFront() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.apply(event(.promptSubmitted), now: t0)
-        _ = tracker.apply(event(.stopped), now: t0)
-        #expect(tracker.hostBecameFrontmost(99, now: t1).isEmpty, "another app")
-        #expect(tracker.hostBecameFrontmost(7, now: t1).count == 1)
-        #expect(status(tracker) == .idle)
-    }
-
-    @Test func failuresCarryTheirReason() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.apply(event(.promptSubmitted), now: t0)
-        _ = tracker.apply(event(.failed("rate_limit")), now: t0)
-        #expect(status(tracker) == .error("rate_limit"))
-    }
-
-    @Test func sessionsEndOrDie() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.apply(event(.sessionStart, "a", pid: 1), now: t0)
-        _ = tracker.apply(event(.sessionStart, "b", pid: 2), now: t0)
-        #expect(tracker.apply(event(.sessionEnd, "a"), now: t1) == [.removed(AgentRef(adapter: "claude", localID: "a"))])
-        #expect(tracker.keepAlive { $0 != 2 } == [.removed(AgentRef(adapter: "claude", localID: "b"))])
-        #expect(tracker.agents.isEmpty)
-    }
-
-    @Test func aSessionSeenMidTurnStillShowsUp() {
-        var tracker = ClaudeSessionTracker()
-        #expect(tracker.apply(event(.toolUsed), now: t0).count == 1)
-        #expect(status(tracker) == .working)
-    }
-
-    @Test func herdrSessionsAreLeftToHerdr() {
-        var tracker = ClaudeSessionTracker()
-        #expect(tracker.apply(event(.sessionStart, herdr: "w1:p1"), now: t0).isEmpty)
-        var standalone = ClaudeSessionTracker(leavesHerdrToHerdr: false)
-        #expect(standalone.apply(event(.sessionStart, herdr: "w1:p1"), now: t0).count == 1)
-    }
-}
-
 @Suite struct ClaudeRegistryTests {
     let t0 = Date(timeIntervalSince1970: 1_000)
+    let ref = AgentRef(adapter: "claude", localID: "s")
 
     @Test func parsesInteractiveSessionsOnly() {
         let interactive = #"{"pid":10915,"sessionId":"36ee","cwd":"/r/nocchi","kind":"interactive","name":"nocchi-b8","status":"busy","statusUpdatedAt":1790850243401}"#
@@ -121,82 +33,56 @@ import Testing
     }
     let here: [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)] = [5: (false, 7, "ttys001"), 6: (true, 7, "ttys002")]
 
-    @Test func registryChangesDriveTheLifecycle() {
+    func run(_ statuses: [String]) -> (ClaudeSessionTracker, [AgentEvent]) {
         var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .idle)
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .working)
-        let done = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        var events: [AgentEvent] = []
+        for status in statuses { events += tracker.applyRegistry([entry(status)], context: here, now: t0) }
+        return (tracker, events)
+    }
+
+    @Test func aTurnFromStartToFinish() {
+        let (tracker, events) = run(["idle", "busy", "shell", "busy", "idle"])
         #expect(tracker.agents["s"]?.status == .done)
-        #expect(done.contains(.turnFinished(AgentRef(adapter: "claude", localID: "s"))))
-        #expect(tracker.applyRegistry([entry("idle")], context: here, now: t0).isEmpty, "no change, no news")
-        #expect(tracker.hosts["s"] == 7)
+        #expect(tracker.agents["s"]?.kind == .claude)
+        #expect(tracker.agents["s"]?.displayName == "app")
+        #expect(events.filter { $0 == .turnFinished(ref) }.count == 1, "celebrated once")
     }
 
-    @Test func waitingThenIdleIsAnsweredNotFinished() {
-        // Recorded with Claude Code 2.1.286: a declined permission prompt.
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        _ = tracker.applyRegistry([entry("waiting")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .blocked)
-        let declined = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+    /// Recorded with Claude Code 2.1.286: a permission prompt, declined; then a question, answered.
+    @Test func waitingForYou() {
+        let (declined, _) = run(["idle", "busy", "waiting"])
+        #expect(declined.agents["s"]?.status == .blocked)
+        let (afterDecline, events) = run(["idle", "busy", "waiting", "idle"])
+        #expect(afterDecline.agents["s"]?.status == .idle, "answered, not finished")
+        #expect(!events.contains(.turnFinished(ref)))
+        let (answered, _) = run(["idle", "busy", "waiting", "busy", "idle"])
+        #expect(answered.agents["s"]?.status == .done)
+    }
+
+    @Test func doneIsSeenWhenItsTerminalComesToTheFront() {
+        var (tracker, _) = run(["idle", "busy", "idle"])
+        #expect(tracker.hostBecameFrontmost(99, now: t0).isEmpty, "another app")
+        #expect(tracker.hostBecameFrontmost(7, now: t0).count == 1)
         #expect(tracker.agents["s"]?.status == .idle)
-        #expect(!declined.contains(.turnFinished(AgentRef(adapter: "claude", localID: "s"))))
     }
 
-    @Test func runningACommandIsWorking() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        _ = tracker.applyRegistry([entry("shell")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .working)
-        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .done, "a turn that ended in a command finished")
-    }
-
-    @Test func aPollNeverOverwritesFresherHookNews() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        _ = tracker.apply(ClaudeHookEvent(kind: .needsInput, sessionID: "s"), now: t0)
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .blocked, "registry still says busy: unchanged, so ignored")
-    }
-
-    @Test func onceHooksSpeakThePollsOnlyKeepThePresence() {
-        // The race rule 4 prevents: a hook finishes the turn, the user looks (idle), then a poll
-        // a second late says busy → idle. Without one authority it would turn green again.
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        _ = tracker.apply(ClaudeHookEvent(kind: .stopped, sessionID: "s"), now: t0)
-        _ = tracker.hostBecameFrontmost(7, now: t0)
-        #expect(tracker.agents["s"]?.status == .idle)
-        let late = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        #expect(tracker.agents["s"]?.status == .idle)
-        #expect(late.isEmpty, "no duplicate events, no second celebration")
-        #expect(tracker.hooked == ["s"])
-        // Presence still comes from the registry.
-        #expect(tracker.applyRegistry([], context: here, now: t0) == [.removed(AgentRef(adapter: "claude", localID: "s"))])
-    }
-
-    @Test func aTurnFinishedTwiceIsCelebratedOnce() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
-        let fromHook = tracker.apply(ClaudeHookEvent(kind: .stopped, sessionID: "s"), now: t0)
-        let fromPoll = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        let celebrations = (fromHook + fromPoll).filter { if case .turnFinished = $0 { true } else { false } }
-        #expect(celebrations.count == 1)
+    @Test func noChangeNoNews() {
+        var (tracker, _) = run(["idle", "busy"])
+        #expect(tracker.applyRegistry([entry("busy")], context: here, now: t0).isEmpty)
+        #expect(tracker.applyRegistry([entry("mystery")], context: here, now: t0).isEmpty, "unknown statuses change nothing")
     }
 
     @Test func goneFromTheRegistryIsGone() {
-        var tracker = ClaudeSessionTracker()
-        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
-        #expect(tracker.applyRegistry([], context: here, now: t0) == [.removed(AgentRef(adapter: "claude", localID: "s"))])
+        var (tracker, _) = run(["idle"])
+        #expect(tracker.applyRegistry([], context: here, now: t0) == [.removed(ref)])
     }
 
     @Test func herdrPanesAreHerdrs() {
         var tracker = ClaudeSessionTracker()
         _ = tracker.applyRegistry([entry("idle", pid: 6, id: "h")], context: here, now: t0)
         #expect(tracker.agents.isEmpty)
+        var standalone = ClaudeSessionTracker(leavesHerdrToHerdr: false)
+        _ = standalone.applyRegistry([entry("idle", pid: 6, id: "h")], context: here, now: t0)
+        #expect(standalone.agents.count == 1)
     }
 }

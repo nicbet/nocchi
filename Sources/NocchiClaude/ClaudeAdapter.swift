@@ -1,23 +1,17 @@
 import AppKit
 import Foundation
 import NocchiCore
-import NocchiHookProtocol
-import NocchiHooks
 import NocchiTerminals
-import OSLog
 import Synchronization
 
-let claudeLog = Logger(subsystem: "com.github.nicbet.nocchi", category: "claude")
-
 /// Claude Code sessions running outside Herdr (a plain terminal tab, an IDE's terminal), seen
-/// natively: Claude's session registry (no setup needed), its hooks when installed, and its
-/// transcripts (steps and messages, through `ClaudeActivityFeed`). Sessions inside Herdr panes
-/// are left to the Herdr adapter.
+/// natively with no setup: Claude's own session registry (which sessions run, and whether they're
+/// busy, running a command, waiting for you or idle) and their transcripts (steps and messages,
+/// through `ClaudeActivityFeed`). Sessions inside Herdr panes are left to the Herdr adapter.
 public final class ClaudeAdapter: AgentAdapter {
     public let id: AdapterID = "claude"
     public let capabilities: AdapterCapabilities = [.focus, .errors]
 
-    private let hooks: HookServer?
     private let registry: URL
     private let pollInterval: Duration
     private let leavesHerdrToHerdr: Bool
@@ -25,12 +19,10 @@ public final class ClaudeAdapter: AgentAdapter {
     private let hosts = Mutex<[String: pid_t]>([:])
 
     public init(
-        hooks: HookServer? = nil,
         registry: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions"),
         pollInterval: Duration = .seconds(1),
         leavesHerdrToHerdr: Bool = true
     ) {
-        self.hooks = hooks
         self.registry = registry
         self.pollInterval = pollInterval
         self.leavesHerdrToHerdr = leavesHerdrToHerdr
@@ -38,7 +30,6 @@ public final class ClaudeAdapter: AgentAdapter {
 
     private enum Signal: Sendable {
         case poll
-        case hook(HookMessage)
         case frontmost(pid_t)
     }
 
@@ -66,16 +57,11 @@ public final class ClaudeAdapter: AgentAdapter {
                 sink.yield(.poll)
             }
         }
-        let hookTask = Task { [hooks] in
-            guard let hooks else { return }
-            for await message in hooks.messages(for: "claude") { sink.yield(.hook(message)) }
-        }
         let frontTask = Task {
             for await pid in await TerminalApps.frontmostAppUpdates() { sink.yield(.frontmost(pid)) }
         }
         defer {
             ticker.cancel()
-            hookTask.cancel()
             frontTask.cancel()
             sink.finish()
         }
@@ -87,11 +73,6 @@ public final class ClaudeAdapter: AgentAdapter {
             case .poll:
                 let entries = ClaudeRegistryEntry.read(registry)
                 events = tracker.applyRegistry(entries, context: await context.lookup(entries.map(\.pid)), now: now)
-            case .hook(let message):
-                guard var event = ClaudeHookEvent.parse(message.input) else { continue }
-                event.herdrPane = message.environment["HERDR_PANE_ID"]
-                claudeLog.info("hook \(String(describing: event.kind), privacy: .public) \(event.sessionID, privacy: .public)")
-                events = tracker.apply(event, now: now)
             case .frontmost(let pid):
                 events = tracker.hostBecameFrontmost(pid, now: now)
             }

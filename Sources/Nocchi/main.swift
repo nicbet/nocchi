@@ -1,6 +1,5 @@
 import AppKit
 import NocchiClaude
-import NocchiCodex
 import NocchiCore
 import NocchiHerdr
 import NocchiUI
@@ -31,8 +30,6 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
         // `--source claude` sees Claude sessions natively (including Herdr's), to check the adapter.
         if CommandLine.arguments.contains("claude") {
             store.run(ClaudeAdapter(leavesHerdrToHerdr: false))
-        } else if CommandLine.arguments.contains("codex") {
-            store.run(CodexAdapter(leavesHerdrToHerdr: false))
         } else {
             store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
         }

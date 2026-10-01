@@ -15,8 +15,6 @@ version="$(sed -n 's/.*version = "\(.*\)".*/\1/p' Sources/NocchiCore/Nocchi.swif
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/nocchi"
-# The hook Claude Code and Codex run (copied to Application Support when hooks are installed).
-cp "$(dirname "$bin")/nocchi-hook" "$app/Contents/MacOS/nocchi-hook"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,6 +35,5 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$app/Contents/MacOS/nocchi-hook" >/dev/null
 codesign --force --sign - "$app" >/dev/null
 echo "$app"
