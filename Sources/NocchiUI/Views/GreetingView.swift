@@ -179,7 +179,7 @@ private struct Sparks: View {
     let t: Double
     /// Pulses start just outside the face (radius 35).
     static let startRadius = 40.0
-    static let brightnessLevels = 12
+    nonisolated static let brightnessLevels = 12
     static let confettiColors: [Color] = [
         Color(red: 0.95, green: 0.33, blue: 0.36), Color(red: 0.32, green: 0.80, blue: 0.72),
         Color(red: 1.00, green: 0.78, blue: 0.30), Color(red: 0.38, green: 0.58, blue: 0.98),
