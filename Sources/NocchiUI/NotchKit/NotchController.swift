@@ -1,6 +1,9 @@
 import AppKit
 import NocchiCore
+import OSLog
 import SwiftUI
+
+let notchLog = Logger(subsystem: "com.github.nicbet.nocchi", category: "notch")
 
 /// Owns the notch panel: positions it on the right screen, makes it click-through outside the
 /// visible shape, and expands/collapses it on hover.
@@ -13,6 +16,8 @@ public final class NotchController {
     private var hoverPoll: Task<Void, Never>?
     private var pendingModeChange: Task<Void, Never>?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    private var peekTracker = PeekTracker()
+    private var peekEnd: Task<Void, Never>?
 
     /// Delay before opening on hover, so passing through the menu bar doesn't open it.
     private let expandDelay: Duration = .milliseconds(90)
@@ -37,6 +42,7 @@ public final class NotchController {
         layout()
         panel.orderFrontRegardless()
         if greeting { greet() }
+        observeMoods()
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackMouse() }
@@ -63,7 +69,35 @@ public final class NotchController {
         observers.removeAll()
         hoverPoll?.cancel()
         pendingModeChange?.cancel()
+        peekEnd?.cancel()
         panel.orderOut(nil)
+    }
+
+    // MARK: Peek
+
+    /// Re-reads the moods whenever they change (the store's clock also ticks them each second).
+    private func observeMoods() {
+        let store = model.store
+        let moods = withObservationTracking {
+            Dictionary(uniqueKeysWithValues: store.state.agents.values.map { ($0.ref, store.mood(of: $0)) })
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeMoods() }
+        }
+        if let peek = peekTracker.update(moods) { self.peek(peek) }
+    }
+
+    /// Opens the notch for a moment when an agent needs you, failed or finished. The expanded
+    /// notch shows the alert for the most urgent agent. Hovering takes over from the timeout.
+    private func peek(_ peek: PeekTracker.Peek) {
+        guard NocchiSettings.shared.autoPeek, !model.isGreeting, !model.isPinned, !model.isHovering else { return }
+        notchLog.info("peek: \(peek.ref.description, privacy: .public) \(String(describing: peek.mood), privacy: .public)")
+        setMode(.expanded)
+        peekEnd?.cancel()
+        peekEnd = Task { [weak self] in
+            try? await Task.sleep(for: peek.duration)
+            guard !Task.isCancelled, let self else { return }
+            if !model.isHovering && !model.isPinned && !model.isGreeting { setMode(.collapsed) }
+        }
     }
 
     /// Opens the notch with the greeting, then collapses (unless the pointer is over it).
@@ -122,6 +156,7 @@ public final class NotchController {
         if inside { startHoverPoll() } else { stopHoverPoll() }
 
         guard inside != model.isHovering else { return }
+        notchLog.debug("hover: \(inside, privacy: .public)")
         model.isHovering = inside
         scheduleModeChange()
     }

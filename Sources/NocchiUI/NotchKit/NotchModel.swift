@@ -13,7 +13,11 @@ public enum NotchMode: Sendable, Equatable {
 public final class NotchModel {
     public var geometry: NotchGeometry
     public var mode: NotchMode = .collapsed {
-        didSet { if mode != oldValue { beginMorph() } }
+        didSet {
+            guard mode != oldValue else { return }
+            notchLog.info("mode: \(String(describing: self.mode), privacy: .public)")
+            beginMorph()
+        }
     }
     /// True while the shape animates between modes. Live faces are AppKit views, which SwiftUI
     /// can't clip to the notch shape or transition, so faces draw as still frames meanwhile.

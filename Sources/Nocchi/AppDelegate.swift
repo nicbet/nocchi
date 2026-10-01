@@ -46,6 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ignoreReduceMotion.state = NocchiSettings.shared.ignoresReduceMotion ? .on : .off
         ignoreReduceMotion.toolTip = "Animate nocchi fully even when Reduce Motion is on in System Settings."
         menu.addItem(ignoreReduceMotion)
+        let autoPeek = NSMenuItem(title: "Peek When Agents Need You", action: #selector(toggleAutoPeek(_:)), keyEquivalent: "")
+        autoPeek.target = self
+        autoPeek.state = NocchiSettings.shared.autoPeek ? .on : .off
+        autoPeek.toolTip = "Open the notch for a moment when an agent needs you, failed or finished."
+        menu.addItem(autoPeek)
         menu.addItem(.separator())
         menu.addItem(demoMenuItem())
         menu.addItem(debugMenuItem())
@@ -82,6 +87,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let socket = Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)
             store.run(HerdrAdapter(socketPath: socket, revealsTerminal: true))
         }
+    }
+
+    @objc private func toggleAutoPeek(_ sender: NSMenuItem) {
+        NocchiSettings.shared.autoPeek.toggle()
+        sender.state = NocchiSettings.shared.autoPeek ? .on : .off
     }
 
     @objc private func toggleIgnoreReduceMotion(_ sender: NSMenuItem) {

@@ -16,6 +16,11 @@ public final class NocchiSettings {
         didSet { defaults.set(ignoresReduceMotion, forKey: Keys.ignoresReduceMotion) }
     }
 
+    /// Open the notch briefly when an agent needs you, failed or finished.
+    public var autoPeek: Bool {
+        didSet { defaults.set(autoPeek, forKey: Keys.autoPeek) }
+    }
+
     /// A named Herdr session to watch instead of the default one.
     public var herdrSession: String? {
         didSet { defaults.set(herdrSession, forKey: Keys.herdrSession) }
@@ -29,12 +34,14 @@ public final class NocchiSettings {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
+        autoPeek = defaults.object(forKey: Keys.autoPeek) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
 
     private enum Keys {
         static let ignoresReduceMotion = "ignoresReduceMotion"
+        static let autoPeek = "autoPeek"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
     }
