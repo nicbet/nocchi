@@ -62,31 +62,40 @@ private struct WavingFace: View {
     }
 }
 
-/// Four vertical streams of small dots drifting upward, like sparks.
+/// Small sparks radiating outward from the face, each on its own angle, speed and lifetime.
 private struct ParticleStreams: View {
     let t: Double
-    static let streams: [CGFloat] = [0.12, 0.24, 0.76, 0.88]
-    static let perStream = 70
+    static let count = 260
+    /// Sparks start just outside the face (radius 35) and its hands.
+    static let startRadius: CGFloat = 44
 
     var body: some View {
         Canvas { context, size in
-            for (s, x) in Self.streams.enumerated() {
-                for i in 0..<Self.perStream {
-                    // Deterministic pseudo-random per particle.
-                    let seed = Double(s * 1000 + i)
-                    func rand(_ k: Double) -> Double {
-                        let v = sin(seed * 12.9898 + k * 78.233) * 43758.5453
-                        return v - floor(v)
-                    }
-                    let speed = 18 + rand(1) * 30
-                    let y = size.height - ((rand(2) * size.height + t * speed).truncatingRemainder(dividingBy: size.height + 10))
-                    let jitter = sin(t * (1 + rand(3) * 2) + rand(4) * 6) * 10 + (rand(5) - 0.5) * 34
-                    let px = x * size.width + jitter
-                    let r = 0.6 + rand(6) * 1.2
-                    let edgeFade = min(1, y / 30, (size.height - y) / 30)
-                    context.fill(Path(ellipseIn: CGRect(x: px - r, y: y - r, width: 2 * r, height: 2 * r)),
-                                 with: .color(.white.opacity((0.35 + rand(7) * 0.6) * max(0, edgeFade))))
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            for i in 0..<Self.count {
+                // Deterministic pseudo-random per particle.
+                let seed = Double(i)
+                func rand(_ k: Double) -> Double {
+                    let v = sin(seed * 12.9898 + k * 78.233) * 43758.5453
+                    return v - floor(v)
                 }
+                let angle = rand(1) * 2 * .pi
+                let speed = 28 + rand(2) * 70
+                let lifetime = 1.8 + rand(3) * 2.2
+                let age = (t + rand(4) * lifetime).truncatingRemainder(dividingBy: lifetime)
+                let progress = age / lifetime
+
+                // Outward along the angle, with a slight sideways drift so paths aren't ruler-straight.
+                let distance = Self.startRadius + CGFloat(speed * age)
+                let drift = CGFloat(sin(age * 3 + rand(5) * 6) * 6 * progress)
+                let x = center.x + cos(angle) * distance - sin(angle) * drift
+                let y = center.y + sin(angle) * distance + cos(angle) * drift
+
+                let fadeIn = min(1, age / 0.25)
+                let opacity = (0.4 + rand(6) * 0.6) * fadeIn * (1 - progress)
+                let r = (0.7 + rand(7) * 1.3) * (1 - 0.4 * progress)
+                context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
+                             with: .color(.white.opacity(opacity)))
             }
         }
     }
