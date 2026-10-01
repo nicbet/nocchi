@@ -56,7 +56,7 @@ struct NotchView: View {
                 .transition(.blurReplace)
         case .expanded where model.isGreeting:
             GreetingView(model: model)
-                .transition(.blurReplace)
+                .transition(.asymmetric(insertion: AnyTransition(.blurReplace), removal: GreetingView.removal))
         case .expanded:
             OverviewView(model: model)
                 .transition(.blurReplace.combined(with: .scale(0.96, anchor: .top)))

@@ -21,20 +21,32 @@ enum GreetingTimeline {
     }
     /// The hands pop out from below the face, then wave.
     static let handsIn = 1.0...1.3
-    /// The wave speeds up into a goodbye, then the hands tuck into the face.
+    /// The wave speeds up into a goodbye.
     static let goodbye = 2.0...2.4
-    static let tuck = 2.4...2.8
-    /// The face settles into idle with a small hop, then the notch collapses to its idle pill.
-    static let settle = 2.7...3.2
-    /// Meanwhile it slides left and shrinks a little, to where the face sits in the overview.
-    static let home = 2.7...3.2
-    static let glowFade = 2.8...3.4
-    /// How long the face rests in idle after settling, before the notch collapses.
-    static let idleHold = 1.0
-    /// When the notch collapses.
-    static let duration = settle.upperBound + idleHold
+    /// Then the face jumps up into the collapsing notch: the arms drop to its sides, it crouches,
+    /// throws its arms up and springs off, flying to where the collapsed notch shows its face.
+    static let armsDown = 2.4...2.7
+    static let crouch = 2.6...2.95
+    static let launch = 2.95...3.07
+    static let flight = 2.98...3.3
+    /// The hands tuck in on the way up: the collapsed face has none.
+    static let tuck = 3.06...3.24
+    static let glowFade = 2.3...2.98
+    /// When the notch collapses: as the face takes off, so the pill closes in with it. The jump
+    /// finishes during the collapse, in the outgoing greeting.
+    static let duration = flight.lowerBound
     /// The frame shown when motion is reduced: hands out, sparks gone.
     static let stillPose = 2.1
+
+    /// The face's path from the card's center to `landing` (an offset), at time `t`: a quick
+    /// rise that slows as it arrives, like the top of a jump.
+    static func jump(_ t: Double, to landing: CGPoint) -> CGPoint {
+        let across = 1 - pow(1 - linear(t, flight), 2)
+        return CGPoint(x: landing.x * across, y: landing.y * rise(t))
+    }
+
+    /// How far along the flight the face is: fast off the ground, slowing as it arrives.
+    static func rise(_ t: Double) -> Double { 1 - pow(1 - linear(t, flight), 3) }
 
     /// 0 before `range`, 1 after, linear in between.
     static func linear(_ t: Double, _ range: ClosedRange<Double>) -> Double {
@@ -55,9 +67,11 @@ enum GreetingTimeline {
 }
 
 /// Shown for a few seconds at launch: Nocchi appears amid a burst of sparks, pops its hands out
-/// to wave hello, waves goodbye, tucks its hands in and settles into idle.
+/// to wave hello, waves goodbye and jumps up into the collapsing notch.
 struct GreetingView: View {
     let model: NotchModel
+    /// Shows this moment instead of playing (for snapshots).
+    var frozenAt: Double?
     @Environment(\.nocchiReducesMotion) private var reduceMotion
     @State private var start = Date()
 
@@ -65,49 +79,89 @@ struct GreetingView: View {
         let body = model.bodySize(for: .expanded)
         VStack(spacing: 0) {
             Color.clear.frame(height: model.geometry.notchSize.height)
-            TimelineView(.animation(paused: reduceMotion)) { timeline in
-                GreetingScene(t: reduceMotion ? GreetingTimeline.stillPose : timeline.date.timeIntervalSince(start),
-                              homeX: OverviewView.focusFaceX(bodyWidth: body.width))
+            TimelineView(.animation(paused: reduceMotion || frozenAt != nil)) { timeline in
+                GreetingScene(t: frozenAt ?? (reduceMotion ? GreetingTimeline.stillPose : timeline.date.timeIntervalSince(start)),
+                              landing: Self.landing(model))
             }
             .padding(EdgeInsets(top: 8, leading: OverviewView.gutter, bottom: 16, trailing: OverviewView.gutter))
         }
         .frame(width: body.width, height: body.height)
     }
+
+    /// Leaving, the greeting stays opaque until the collapse is nearly done, so the face is seen
+    /// all the way up; it fades out as it lands on the collapsed face.
+    static let removal = AnyTransition.modifier(active: LateFade(shown: 0), identity: LateFade(shown: 1))
+
+    /// How opaque the greeting is when the collapse has `shown` (1 → 0) of the way left to go.
+    nonisolated static func opacity(shown: Double) -> Double { min(1, max(0, shown / 0.05)) }
+
+    /// Where the collapsed notch shows the primary face, as an offset from the card's center.
+    static func landing(_ model: NotchModel) -> GreetingScene.Landing {
+        let h = model.geometry.notchSize.height
+        let body = model.bodySize(for: .expanded)
+        let cardCenterY = h + 8 + (body.height - h - 8 - 16) / 2
+        return GreetingScene.Landing(
+            offset: CGPoint(x: -model.bodySize(for: .collapsed).width / 2 + model.earWidth / 2, y: h / 2 - cardCenterY),
+            scale: CollapsedView.faceSize(notchHeight: h) / WavingFace.size)
+    }
+}
+
+struct LateFade: ViewModifier, Animatable {
+    var shown: Double
+    nonisolated var animatableData: Double {
+        get { shown }
+        set { shown = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content.opacity(GreetingView.opacity(shown: shown))
+    }
 }
 
 /// One frame of the greeting at time `t`. Separate from the clock so snapshots can render any moment.
 struct GreetingScene: View {
+    /// Where the jump ends: an offset from the card's center, and the face's size there.
+    struct Landing {
+        var offset: CGPoint
+        var scale: CGFloat
+    }
+
     let t: Double
-    /// Where the face ends up, as an offset from the card's center: its spot in the overview.
-    var homeX: CGFloat = 0
+    var landing = Landing(offset: CGPoint(x: -200, y: -96), scale: 0.3)
 
     var body: some View {
         let glow = GreetingTimeline.glow(t)
-        // A gentle float and tilt throughout, so the face looks alive.
-        let float = CGSize(width: sin(t * 2 * .pi * 0.45) * 3, height: sin(t * 2 * .pi * 0.9) * 3)
-        let tilt = sin(t * 2 * .pi * 0.6 + 1) * 4
-        let homing = CGFloat(GreetingTimeline.progress(t, GreetingTimeline.home))
-        let home = homeX * homing
-        let shrink: CGFloat = 1 + (OverviewView.focusFaceSize / WavingFace.size - 1) * homing
+        // A gentle float and tilt throughout, so the face looks alive; calmed down for the jump
+        // so it lands on the spot.
+        let calm = 1 - GreetingTimeline.progress(t, GreetingTimeline.crouch.lowerBound...GreetingTimeline.launch.upperBound)
+        let float = CGSize(width: sin(t * 2 * .pi * 0.45) * 3 * calm, height: sin(t * 2 * .pi * 0.9) * 3 * calm)
+        let tilt = sin(t * 2 * .pi * 0.6 + 1) * 4 * calm
+        let jump = GreetingTimeline.jump(t, to: landing.offset)
+        let flown = CGFloat(GreetingTimeline.rise(t))
+        let shrink = 1 + (landing.scale - 1) * flown
         let card = CardShape(open: 0.3 + 0.7 * GreetingTimeline.progress(t, GreetingTimeline.open))
+        let position = CGSize(width: jump.x + float.width, height: jump.y + float.height)
         ZStack {
             // Rendered offscreen at full size: drawn directly, the live notch clipped the sparks
             // to a corner of the card.
-            Sparks(t: t).drawingGroup().allowsHitTesting(false)
             // The glow is a background so its size doesn't stretch the card.
-            WavingFace(t: t)
-                .scaleEffect(shrink)
-                .rotationEffect(.degrees(tilt))
+            Sparks(t: t).drawingGroup().allowsHitTesting(false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
                     RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.6).opacity(0.45 * glow), .clear],
                                    center: .center, startRadius: 10, endRadius: 130)
                         .frame(width: 280, height: 280)
+                        .offset(position)
                 }
-                .offset(x: home + float.width, y: float.height)
+            .background(card.fill(.white.opacity(0.04)))
+            .clipShape(card)
+            // Not clipped to the card: the jump leaves it.
+            WavingFace(t: t)
+                .scaleEffect(shrink)
+                .rotationEffect(.degrees(tilt))
+                .offset(position)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(card.fill(.white.opacity(0.04)))
-        .clipShape(card)
     }
 }
 
@@ -122,8 +176,8 @@ private struct CardShape: Shape {
 }
 
 /// The face with two small hands. The hands pop out from below (the face squashes as they do),
-/// the right one waves (faster for the goodbye) and the left bobs; then both tuck into the face
-/// and it hops into idle.
+/// the right one waves (faster for the goodbye) and the left bobs; then both drop to its sides,
+/// it crouches, throws them up as it springs off, and tucks them in on the way up.
 struct WavingFace: View {
     let t: Double
     static let size: CGFloat = 70
@@ -132,33 +186,46 @@ struct WavingFace: View {
         let s = Self.size
         let handsIn = GreetingTimeline.overshoot(t, GreetingTimeline.handsIn)
         let goodbye = GreetingTimeline.progress(t, GreetingTimeline.goodbye)
+        let down = GreetingTimeline.progress(t, GreetingTimeline.armsDown)
+        let up = GreetingTimeline.overshoot(t, GreetingTimeline.launch)
         let tuck = GreetingTimeline.progress(t, GreetingTimeline.tuck)
-        let handsOut = min(1, handsIn) * (1 - tuck)
+        let waving = min(1, handsIn) * (1 - down)
         let waveSpeed = 2.2 + 1.6 * goodbye                  // Hz
-        let wave = sin((t - GreetingTimeline.handsIn.lowerBound) * 2 * .pi * waveSpeed) * 28 * handsOut
-        let bob = sin(t * 2 * .pi * 1.1) * 6 * handsOut
-        // Hands rise from under the face, then slide into it.
-        let handsY = s * 0.35 * (1 - min(1, handsIn))
-        let handsX = 1 - 0.6 * tuck
+        let wave = sin((t - GreetingTimeline.handsIn.lowerBound) * 2 * .pi * waveSpeed) * 28 * waving
+        let bob = sin(t * 2 * .pi * 1.1) * 6 * waving
+        // Hand spots (as fractions of the face size): waving, at its sides, thrown up.
+        func spot(_ wave: CGPoint, _ side: CGPoint, _ raised: CGPoint) -> CGPoint {
+            let low = CGPoint(x: wave.x + (side.x - wave.x) * down, y: wave.y + (side.y - wave.y) * down)
+            let x = low.x + (raised.x - low.x) * up, y = low.y + (raised.y - low.y) * up
+            // Hands rise from under the face, then slide into it.
+            return CGPoint(x: x * s * (1 - 0.6 * tuck), y: y * s + s * 0.35 * (1 - min(1, handsIn)))
+        }
+        let left = spot(CGPoint(x: -0.55, y: 0.12), CGPoint(x: -0.6, y: 0.36), CGPoint(x: -0.5, y: -0.55))
+        let right = spot(CGPoint(x: 0.55, y: -0.05), CGPoint(x: 0.6, y: 0.36), CGPoint(x: 0.5, y: -0.55))
         let handScale = max(0, handsIn) * (1 - tuck)
         let handOpacity = min(1, GreetingTimeline.linear(t, GreetingTimeline.handsIn) * 3) * (1 - tuck)
-        // A squash as the hands pop out, and a hop when settling.
-        let squash = sin(GreetingTimeline.linear(t, GreetingTimeline.handsIn) * .pi) * 0.07
-        let hop = sin(GreetingTimeline.linear(t, GreetingTimeline.settle) * .pi) * 6
-        ZStack {
+        // A squash as the hands pop out; a deep crouch before the jump, sinking a little, and a
+        // stretch as it springs off.
+        let pop = sin(GreetingTimeline.linear(t, GreetingTimeline.handsIn) * .pi) * 0.07
+        let crouch = GreetingTimeline.progress(t, GreetingTimeline.crouch) * (1 - GreetingTimeline.progress(t, GreetingTimeline.launch))
+        let stretch = sin(GreetingTimeline.linear(t, GreetingTimeline.launch.lowerBound...GreetingTimeline.flight.upperBound) * .pi)
+        let squashX = 1 + pop + 0.14 * crouch - 0.1 * stretch
+        let squashY = 1 - pop - 0.18 * crouch + 0.14 * stretch
+        let sink = s * 0.08 * crouch
+        return ZStack {
             hand.rotationEffect(.degrees(-20 + bob), anchor: .bottomTrailing)
-                .offset(x: -s * 0.55 * handsX, y: s * 0.12 + handsY)
+                .offset(x: left.x, y: left.y)
                 .scaleEffect(handScale)
                 .opacity(handOpacity)
             hand.rotationEffect(.degrees(20 + wave), anchor: .bottomLeading)
-                .offset(x: s * 0.55 * handsX, y: -s * 0.05 + handsY)
+                .offset(x: right.x, y: right.y)
                 .scaleEffect(handScale)
                 .opacity(handOpacity)
             FaceView(mood: .idle, size: s, seed: 0.37)
                 .frame(width: s * 1.4, height: s * 1.4)
-                .scaleEffect(x: 1 + squash, y: 1 - squash, anchor: .bottom)
-                .offset(y: -hop)
+                .scaleEffect(x: squashX, y: squashY, anchor: .bottom)
         }
+        .offset(y: sink)
     }
 
     private var hand: some View {

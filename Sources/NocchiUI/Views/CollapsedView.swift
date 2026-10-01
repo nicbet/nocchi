@@ -12,7 +12,7 @@ struct CollapsedView: View {
         VStack(spacing: 0) {
         HStack(spacing: 0) {
             FaceView(mood: store.primary.map(store.mood(of:)) ?? store.emptyMood,
-                     size: (h * 0.66).rounded(), seed: store.primary?.faceSeed ?? 0.37)
+                     size: Self.faceSize(notchHeight: h), seed: store.primary?.faceSeed ?? 0.37)
                 .frame(width: model.earWidth, height: h)
             if !model.geometry.hasHardwareNotch && NocchiSettings.shared.showsStatusText {
                 StatusText(model: model)
@@ -32,6 +32,9 @@ struct CollapsedView: View {
         }
         .frame(width: model.bodySize(for: .collapsed).width, height: model.bodySize(for: .collapsed).height, alignment: .top)
     }
+
+    /// The primary face's size; the greeting's jump lands on it.
+    static func faceSize(notchHeight h: CGFloat) -> CGFloat { (h * 0.66).rounded() }
 
 }
 

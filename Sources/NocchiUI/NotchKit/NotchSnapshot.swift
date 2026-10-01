@@ -98,14 +98,33 @@ public enum NotchSnapshot {
             }
         }
         do {
-            // Filmstrip of the greeting's choreography.
-            let times = [0.15, 0.6, 1.15, 1.6, 2.2, 2.6, 2.95, 3.5]
-            let strip = VStack(spacing: 8) {
+            // Filmstrip of the greeting's choreography, in the notch. From `duration` on the notch
+            // collapses: the shape follows the collapse spring and the greeting crossfades into the
+            // collapsed view, as the live transition does.
+            let times = [0.15, 0.6, 1.15, 1.6, 2.2, 2.55, 2.85, 2.98, 3.04, 3.1, 3.18, 3.26, 3.4]
+            let model = NotchModel(geometry: geometry, store: previewStore(.quiet))
+            let expanded = model.shapeSize(for: .expanded), collapsed = model.shapeSize(for: .collapsed)
+            let strip = VStack(spacing: 6) {
                 ForEach(times, id: \.self) { t in
+                    // How much of the way back to expanded the collapse spring still is (critically damped).
+                    let w = 2 * Double.pi / 0.35, tau = max(0, t - GreetingTimeline.duration)
+                    let open = CGFloat((1 + w * tau) * exp(-w * tau))
+                    let size = CGSize(width: collapsed.width + (expanded.width - collapsed.width) * open,
+                                      height: collapsed.height + (expanded.height - collapsed.height) * open)
+                    let shape = NotchShape(topRadius: 6 + 8 * open, bottomRadius: 12 + 20 * open)
                     HStack {
-                        Text(String(format: "%.1f s", t)).font(.caption.monospaced()).foregroundStyle(.white).frame(width: 50)
-                        GreetingScene(t: t, homeX: OverviewView.focusFaceX(bodyWidth: 640))
-                            .frame(width: 604, height: 144)
+                        Text(String(format: "%.2f s", t)).font(.caption.monospaced()).foregroundStyle(.white).frame(width: 56)
+                        ZStack(alignment: .top) {
+                            shape.fill(.black).frame(width: size.width, height: size.height)
+                            ZStack(alignment: .top) {
+                                GreetingView(model: model, frozenAt: t).opacity(GreetingView.opacity(shown: Double(open)))
+                                CollapsedView(model: model).opacity(Double(1 - open))
+                            }
+                            .frame(width: size.width, height: size.height, alignment: .top)
+                            .clipShape(shape)
+                        }
+                        .frame(width: expanded.width + 20, height: expanded.height, alignment: .top)
+                        .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
                     }
                 }
             }

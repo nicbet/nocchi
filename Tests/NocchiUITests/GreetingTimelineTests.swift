@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import NocchiUI
 
@@ -5,16 +6,26 @@ import Testing
     @Test func everythingFinishesBeforeTheNotchCollapses() {
         let lastSparkDies = GreetingTimeline.emitEnd + GreetingTimeline.pulseTravel
         #expect(lastSparkDies <= GreetingTimeline.duration)
-        #expect(GreetingTimeline.settle.upperBound + GreetingTimeline.idleHold <= GreetingTimeline.duration)
-        #expect(GreetingTimeline.home.upperBound + GreetingTimeline.idleHold <= GreetingTimeline.duration)
         #expect(GreetingTimeline.glowFade.upperBound <= GreetingTimeline.duration)
     }
 
-    @Test func handsComeOutWaveGoodbyeAndTuckBeforeTheSettle() {
+    @Test func theJumpTakesOffAsTheNotchCollapsesAndLandsWithIt() {
+        #expect(GreetingTimeline.duration >= GreetingTimeline.launch.lowerBound)
+        #expect(GreetingTimeline.duration <= GreetingTimeline.launch.upperBound)
+        // The collapse spring (0.35 s) and the flight end together.
+        #expect(abs(GreetingTimeline.flight.upperBound - (GreetingTimeline.duration + 0.35)) < 0.05)
+        #expect(GreetingTimeline.tuck.upperBound <= GreetingTimeline.flight.upperBound)
+        let landing = CGPoint(x: -110, y: -96)
+        #expect(GreetingTimeline.jump(GreetingTimeline.flight.lowerBound, to: landing) == .zero)
+        #expect(GreetingTimeline.jump(GreetingTimeline.flight.upperBound, to: landing) == landing)
+    }
+
+    @Test func handsComeOutWaveGoodbyeThenDropForTheJump() {
         #expect(GreetingTimeline.open.upperBound <= GreetingTimeline.handsIn.lowerBound)
         #expect(GreetingTimeline.handsIn.upperBound <= GreetingTimeline.goodbye.lowerBound)
-        #expect(GreetingTimeline.goodbye.upperBound <= GreetingTimeline.tuck.lowerBound)
-        #expect(GreetingTimeline.tuck.upperBound <= GreetingTimeline.settle.upperBound)
+        #expect(GreetingTimeline.goodbye.upperBound <= GreetingTimeline.armsDown.lowerBound)
+        #expect(GreetingTimeline.armsDown.lowerBound <= GreetingTimeline.crouch.lowerBound)
+        #expect(GreetingTimeline.crouch.upperBound <= GreetingTimeline.launch.lowerBound)
     }
 
     @Test func overshootStartsAtZeroAndSettlesAtOne() {
