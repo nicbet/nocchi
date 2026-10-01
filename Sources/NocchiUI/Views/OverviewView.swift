@@ -6,6 +6,8 @@ struct OverviewView: View {
     let model: NotchModel
     /// The focus card grows into the composer and shrinks back.
     @Namespace private var card
+    /// Set when the composer closes: the chips wait until the focus card has shrunk back.
+    @State private var chipsWait = false
 
     /// When the primary agent is in one of these, the expanded notch shows an alert instead.
     static let alertMoods: Set<Mood> = [.waiting, .error, .done]
@@ -32,7 +34,7 @@ struct OverviewView: View {
                     HStack(spacing: 10) {
                         FocusCard(model: model, card: card)
                             .frame(width: (body.width - 36 - 10) * 0.52)
-                        ChipsCard(store: store)
+                        ChipsCard(store: store, waits: chipsWait)
                     }
                     .transition(.opacity)
                 }
@@ -40,6 +42,9 @@ struct OverviewView: View {
             .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
             .animation(.spring(duration: 0.5, bounce: 0.2), value: model.prompt.target)
+            .onChange(of: model.prompt.target) { old, new in
+                chipsWait = old != nil && new == nil
+            }
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
         .frame(width: body.width, height: body.height)
@@ -94,9 +99,6 @@ private struct FocusCard: View {
             .onAgentClick(help: entry.map(model.primaryClickHelp) ?? "") {
                 if let entry { model.activatePrimary(entry) }
             }
-            if let entry, store.capabilities(of: entry.ref).contains(.prompt) {
-                MessageButton(model: model, entry: entry, blocked: entry.info.status == .blocked)
-            }
         }
         .padding(.horizontal, Self.padding)
         .frame(maxHeight: .infinity)
@@ -105,27 +107,6 @@ private struct FocusCard: View {
                 .fill(.white.opacity(0.06))
                 .matchedGeometryEffect(id: "card", in: card)
         }
-    }
-}
-
-private struct MessageButton: View {
-    let model: NotchModel
-    let entry: AgentEntry
-    let blocked: Bool
-
-    var body: some View {
-        Button {
-            model.prompt = .composing(entry.ref)
-        } label: {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(.white.opacity(0.1)))
-        }
-        .buttonStyle(PressScale())
-        .disabled(blocked)
-        .opacity(blocked ? 0.35 : 1)
-        .help(blocked ? "\(entry.info.displayName) is waiting for you: answer it in the terminal" : "Message \(entry.info.displayName)")
     }
 }
 
@@ -171,7 +152,14 @@ private struct StepCarousel: View {
 /// One chip per other agent, two columns, tinted by state.
 private struct ChipsCard: View {
     let store: AgentStore
+    /// Slide in only once the focus card is back in place, instead of overlapping it.
+    @State private var shown: Bool
     static let maxChips = 4
+
+    init(store: AgentStore, waits: Bool) {
+        self.store = store
+        _shown = State(initialValue: !waits)
+    }
 
     var body: some View {
         let others = store.others
@@ -206,6 +194,12 @@ private struct ChipsCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
         .animation(.spring(duration: 0.4, bounce: 0.15), value: others.map(\.ref))
+        .opacity(shown ? 1 : 0)
+        .offset(x: shown ? 0 : 16)
+        .onAppear {
+            guard !shown else { return }
+            withAnimation(.spring(duration: 0.35, bounce: 0.15).delay(0.32)) { shown = true }
+        }
     }
 }
 
