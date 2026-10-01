@@ -3,38 +3,57 @@ import SwiftUI
 
 /// The greeting's choreography. Everything finishes before `duration`, when the notch collapses.
 enum GreetingTimeline {
-    /// Shockwave rings of sparks, fired from the face every 0.3 s until `emitEnd`.
-    static let bursts: [Double] = Array(stride(from: 0, through: 1.8, by: 0.3))
-    static let sparksPerRing = 900
-    static let emitEnd = 1.8
-    /// How long a ring lives; it has left the card by then.
-    static let sparkLifetime = 1.6...1.8
-    /// Confetti pieces thrown out with the first rings.
+    /// The card grows open from the middle as the first pulse goes out.
+    static let open = 0.0...0.35
+    /// The face sends pulses through a field of glitter, one every `pulsePeriod`, until `emitEnd`.
+    static let pulsePeriod = 0.3
+    static let emitEnd = 0.9
+    static let pulseSpeed = 230.0                      // pt/s
+    /// How long the last pulse takes to cross the card; the field is dark after `emitEnd` + this.
+    static let pulseTravel = 1.3
+    static let sparkCount = 5000
+    /// Confetti pieces thrown out with the first pulses.
     static let confettiCount = 24
 
-    /// Glow strength: a base level plus a flare after each burst.
+    /// Glow strength: a steady glow that fades out at the end.
     static func glow(_ t: Double) -> Double {
-        let flare = bursts.reduce(0) { sum, burst in t >= burst ? sum + exp(-(t - burst) * 8) : sum }
-        return (0.6 + 0.4 * min(1, flare)) * (1 - progress(t, glowFade))
+        0.8 * (1 - progress(t, glowFade))
     }
+    /// The hands pop out from below the face, then wave.
+    static let handsIn = 1.0...1.3
     /// The wave speeds up into a goodbye, then the hands tuck into the face.
-    static let goodbye = 2.2...2.6
-    static let tuck = 2.6...3.0
-    /// The final action: a small bow.
-    static let bow = 2.9...3.5
-    static let glowFade = 3.2...3.8
+    static let goodbye = 2.0...2.4
+    static let tuck = 2.4...2.8
+    /// The face settles into idle with a small hop, then the notch collapses to its idle pill.
+    static let settle = 2.7...3.2
+    static let glowFade = 2.8...3.4
+    /// How long the face rests in idle after settling, before the notch collapses.
+    static let idleHold = 1.0
     /// When the notch collapses.
-    static let duration = 4.0
+    static let duration = settle.upperBound + idleHold
+    /// The frame shown when motion is reduced: hands out, sparks gone.
+    static let stillPose = 2.1
+
+    /// 0 before `range`, 1 after, linear in between.
+    static func linear(_ t: Double, _ range: ClosedRange<Double>) -> Double {
+        min(1, max(0, (t - range.lowerBound) / (range.upperBound - range.lowerBound)))
+    }
 
     /// 0 before `range`, 1 after, eased in between.
     static func progress(_ t: Double, _ range: ClosedRange<Double>) -> Double {
-        let x = min(1, max(0, (t - range.lowerBound) / (range.upperBound - range.lowerBound)))
+        let x = linear(t, range)
         return x * x * (3 - 2 * x)
+    }
+
+    /// 0 before `range`, 1 after, overshooting a little before settling.
+    static func overshoot(_ t: Double, _ range: ClosedRange<Double>) -> Double {
+        let x = linear(t, range) - 1
+        return 1 + 2.7 * x * x * x + 1.7 * x * x
     }
 }
 
-/// Shown for a few seconds at launch: Nocchi waves hello amid a burst of sparks, waves goodbye,
-/// tucks its hands in and bows.
+/// Shown for a few seconds at launch: Nocchi appears amid a burst of sparks, pops its hands out
+/// to wave hello, waves goodbye, tucks its hands in and settles into idle.
 struct GreetingView: View {
     let model: NotchModel
     @Environment(\.nocchiReducesMotion) private var reduceMotion
@@ -45,7 +64,7 @@ struct GreetingView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: model.geometry.notchSize.height)
             TimelineView(.animation(paused: reduceMotion)) { timeline in
-                GreetingScene(t: reduceMotion ? 0 : timeline.date.timeIntervalSince(start))
+                GreetingScene(t: reduceMotion ? GreetingTimeline.stillPose : timeline.date.timeIntervalSince(start))
             }
             .padding(EdgeInsets(top: 8, leading: 18, bottom: 16, trailing: 18))
         }
@@ -59,8 +78,11 @@ struct GreetingScene: View {
 
     var body: some View {
         let glow = GreetingTimeline.glow(t)
+        let card = CardShape(open: 0.3 + 0.7 * GreetingTimeline.progress(t, GreetingTimeline.open))
         ZStack {
-            Sparks(t: t).allowsHitTesting(false)
+            // Rendered offscreen at full size: drawn directly, the live notch clipped the sparks
+            // to a corner of the card.
+            Sparks(t: t).drawingGroup().allowsHitTesting(false)
             // The glow is a background so its size doesn't stretch the card.
             WavingFace(t: t)
                 .background {
@@ -70,40 +92,58 @@ struct GreetingScene: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.04)))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(card.fill(.white.opacity(0.04)))
+        .clipShape(card)
     }
 }
 
-/// The face with two small hands. The right hand waves (faster for the goodbye), the left bobs;
-/// then both tuck into the face and the face bows.
+/// The card, `open` of its full width, centered.
+private struct CardShape: Shape {
+    var open: Double
+
+    func path(in rect: CGRect) -> Path {
+        let inset = rect.width * (1 - open) / 2
+        return RoundedRectangle(cornerRadius: 22, style: .continuous).path(in: rect.insetBy(dx: inset, dy: 0))
+    }
+}
+
+/// The face with two small hands. The hands pop out from below (the face squashes as they do),
+/// the right one waves (faster for the goodbye) and the left bobs; then both tuck into the face
+/// and it hops into idle.
 private struct WavingFace: View {
     let t: Double
     static let size: CGFloat = 70
 
     var body: some View {
         let s = Self.size
+        let handsIn = GreetingTimeline.overshoot(t, GreetingTimeline.handsIn)
         let goodbye = GreetingTimeline.progress(t, GreetingTimeline.goodbye)
         let tuck = GreetingTimeline.progress(t, GreetingTimeline.tuck)
+        let handsOut = min(1, handsIn) * (1 - tuck)
         let waveSpeed = 2.2 + 1.6 * goodbye                  // Hz
-        let wave = sin(t * 2 * .pi * waveSpeed) * 28 * (1 - tuck)
-        let bob = sin(t * 2 * .pi * 1.1) * 6 * (1 - tuck)
-        // A bow: tilt forward and come back up.
-        let bowPhase = GreetingTimeline.progress(t, GreetingTimeline.bow)
-        let bow = sin(bowPhase * .pi) * 10                   // degrees, and points down
+        let wave = sin((t - GreetingTimeline.handsIn.lowerBound) * 2 * .pi * waveSpeed) * 28 * handsOut
+        let bob = sin(t * 2 * .pi * 1.1) * 6 * handsOut
+        // Hands rise from under the face, then slide into it.
+        let handsY = s * 0.35 * (1 - min(1, handsIn))
+        let handsX = 1 - 0.6 * tuck
+        let handScale = max(0, handsIn) * (1 - tuck)
+        let handOpacity = min(1, GreetingTimeline.linear(t, GreetingTimeline.handsIn) * 3) * (1 - tuck)
+        // A squash as the hands pop out, and a hop when settling.
+        let squash = sin(GreetingTimeline.linear(t, GreetingTimeline.handsIn) * .pi) * 0.07
+        let hop = sin(GreetingTimeline.linear(t, GreetingTimeline.settle) * .pi) * 6
         ZStack {
             hand.rotationEffect(.degrees(-20 + bob), anchor: .bottomTrailing)
-                .offset(x: -s * 0.55 * (1 - 0.6 * tuck), y: s * 0.12)
-                .scaleEffect(1 - tuck)
-                .opacity(1 - tuck)
+                .offset(x: -s * 0.55 * handsX, y: s * 0.12 + handsY)
+                .scaleEffect(handScale)
+                .opacity(handOpacity)
             hand.rotationEffect(.degrees(20 + wave), anchor: .bottomLeading)
-                .offset(x: s * 0.55 * (1 - 0.6 * tuck), y: -s * 0.05)
-                .scaleEffect(1 - tuck)
-                .opacity(1 - tuck)
+                .offset(x: s * 0.55 * handsX, y: -s * 0.05 + handsY)
+                .scaleEffect(handScale)
+                .opacity(handOpacity)
             FaceView(mood: .idle, size: s, seed: 0.37)
                 .frame(width: s * 1.4, height: s * 1.4)
-                .rotation3DEffect(.degrees(bow * 2), axis: (x: 1, y: 0, z: 0), perspective: 0.4)
-                .offset(y: bow * 0.4)
+                .scaleEffect(x: 1 + squash, y: 1 - squash, anchor: .bottom)
+                .offset(y: -hop)
         }
     }
 
@@ -117,59 +157,101 @@ private struct WavingFace: View {
     }
 }
 
-/// A celebration: shockwave rings of tiny sparks expanding out of the face, plus confetti.
-/// The card is wide and short, so mostly the left and right arcs of each ring are visible,
-/// moving outward as bands.
+/// A celebration: pulses rippling outward from the face through a field of glitter, plus confetti.
+/// The glitter stays put (drifting slightly); each pulse lights up the sparks it passes, so the card
+/// shows bright bands moving outward — a ring around the face, and vertical bands further out where
+/// the card is too short to show the whole ring. A pulse reaching a side edge makes it flash.
 private struct Sparks: View {
     let t: Double
-    /// Rings start just outside the face (radius 35) and its hands.
-    static let startRadius: CGFloat = 46
-    static let ringSpeed: CGFloat = 190            // pt/s
+    /// Pulses start just outside the face (radius 35).
+    static let startRadius = 40.0
+    static let brightnessLevels = 12
     static let confettiColors: [Color] = [
         Color(red: 0.95, green: 0.33, blue: 0.36), Color(red: 0.32, green: 0.80, blue: 0.72),
         Color(red: 1.00, green: 0.78, blue: 0.30), Color(red: 0.38, green: 0.58, blue: 0.98),
         Color(red: 0.96, green: 0.48, blue: 0.70),
     ]
 
+    /// How lit a spark at `distance` from the face is: 0 between pulses, 1 on a crest.
+    /// `sharpness` narrows the bands.
+    static func pulse(_ t: Double, distance: Double, sharpness: Double) -> Double {
+        // When the wave now at this distance left the face.
+        let emitted = t - (distance - startRadius) / GreetingTimeline.pulseSpeed
+        let end = GreetingTimeline.emitEnd
+        guard emitted >= 0, emitted <= end else { return 0 }
+        let wave = 0.5 - 0.5 * cos(emitted / GreetingTimeline.pulsePeriod * 2 * .pi)
+        // The first and last pulses are softer, so the train starts and ends smoothly.
+        let envelope = 0.6 + 0.4 * sin(emitted / end * .pi)
+        return pow(wave, sharpness) * envelope
+    }
+
     var body: some View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let count = GreetingTimeline.sparksPerRing
-            let lifetime = GreetingTimeline.sparkLifetime.upperBound
+            let far = Double(hypot(size.width, size.height) / 2)
+            // Thousands of separate fills are slow and the live renderer drops some, so sparks are
+            // gathered into a few paths by brightness and each path is filled once.
+            var glitter = [Path](repeating: Path(), count: Self.brightnessLevels)
+            func spark(at x: CGFloat, _ y: CGFloat, radius dot: CGFloat, opacity: Double) {
+                let level = min(Self.brightnessLevels - 1, Int(opacity * Double(Self.brightnessLevels)))
+                glitter[level].addRect(CGRect(x: x - dot, y: y - dot, width: 2 * dot, height: 2 * dot))
+            }
 
-            for (ring, birth) in GreetingTimeline.bursts.enumerated() where t >= birth && t - birth < lifetime {
-                let age = t - birth
-                let progress = age / lifetime
-                let radius = Self.startRadius + Self.ringSpeed * CGFloat(age)
-                let thickness = 18 + 40 * CGFloat(progress)       // the band spreads as it travels
-                let ringFade = min(1, age / 0.12) * (1 - progress * progress)
-                for i in 0..<count {
-                    let h = { (k: UInt64) in hash01(UInt64(ring), UInt64(i), k) }
-                    let angle = (Double(i) + h(1)) / Double(count) * 2 * .pi
-                    // Two random numbers averaged: denser in the middle of the band.
-                    let offset = CGFloat((h(2) + h(3)) / 2 - 0.5) * thickness
-                    let r = radius + offset
-                    let x = center.x + cos(angle) * r
-                    let y = center.y + sin(angle) * r
-                    let dot = CGFloat(0.4 + h(4) * 0.8)
-                    let opacity = ringFade * (0.3 + 0.7 * h(5))
-                    context.fill(Path(CGRect(x: x - dot, y: y - dot, width: 2 * dot, height: 2 * dot)),
-                                 with: .color(.white.opacity(opacity)))
+            for i in 0..<GreetingTimeline.sparkCount {
+                let h = { (k: UInt64) in hash01(9, UInt64(i), k) }
+                // A spot on the card, drifting slowly away from the face.
+                let base = CGPoint(x: h(1) * size.width, y: h(2) * size.height)
+                let dx = Double(base.x - center.x), dy = Double(base.y - center.y)
+                let d0 = hypot(dx, dy)
+                guard d0 > Self.startRadius else { continue }
+                let distance = d0 + 8 * t
+                // Bands are tight near the face and spread as they travel.
+                let lit = Self.pulse(t, distance: distance, sharpness: 6 - 4 * min(1, distance / far))
+                guard lit > 0.02 else { continue }
+                let x = center.x + CGFloat(dx / d0 * distance)
+                let y = center.y + CGFloat(dy / d0 * distance)
+                let dot = CGFloat(0.5 + h(3) * 0.9)
+                // Each spark twinkles on its own as well.
+                let twinkle = 0.55 + 0.45 * sin(t * (9 + h(4) * 9) + h(5) * 2 * .pi)
+                spark(at: x, y, radius: dot, opacity: lit * twinkle * (0.35 + 0.65 * h(6)))
+            }
+
+            // Edge flashes: a thin glittering streak down each side as a pulse reaches it.
+            let flash = Self.pulse(t, distance: Double(center.x), sharpness: 10)
+            if flash > 0.02 {
+                for side in 0..<2 {
+                    var y: CGFloat = 12
+                    var i: UInt64 = 0
+                    while y < size.height - 12 {
+                        let h = { (k: UInt64) in hash01(UInt64(100 + side), i, k) }
+                        let inset = 3 + CGFloat(h(1)) * 3
+                        let x = side == 0 ? inset : size.width - inset
+                        let dot = CGFloat(0.5 + h(2) * 0.7)
+                        spark(at: x, y, radius: dot, opacity: flash * (0.4 + 0.6 * h(3)))
+                        y += 1.2 + CGFloat(h(4)) * 1.2
+                        i += 1
+                    }
                 }
             }
 
-            // Confetti: a few colored pieces tumbling outward with the first rings.
+            for (level, path) in glitter.enumerated() where !path.isEmpty {
+                let opacity = (Double(level) + 0.5) / Double(Self.brightnessLevels)
+                context.fill(path, with: .color(.white.opacity(opacity)))
+            }
+
+            // Confetti: a few colored pieces tumbling outward with the first pulses.
             for i in 0..<GreetingTimeline.confettiCount {
                 let h = { (k: UInt64) in hash01(77, UInt64(i), k) }
-                let birth = h(1) * 0.9
-                let life = 1.8 + h(2) * 0.6
+                let birth = h(1) * 0.6
+                let life = 1.2 + h(2) * 0.4
                 guard t >= birth, t - birth < life else { continue }
                 let age = t - birth
                 let angle = h(3) * 2 * .pi
-                let distance = Self.startRadius + CGFloat(120 + h(4) * 160) * CGFloat(1 - exp(-1.2 * age)) / 1.2
+                let distance = Self.startRadius + (120 + h(4) * 160) * (1 - exp(-1.2 * age)) / 1.2
                 let fall = CGFloat(age * age * 10)       // a touch of gravity
                 var piece = context
-                piece.translateBy(x: center.x + cos(angle) * distance, y: center.y + sin(angle) * distance + fall)
+                piece.translateBy(x: center.x + CGFloat(cos(angle) * distance),
+                                  y: center.y + CGFloat(sin(angle) * distance) + fall)
                 piece.rotate(by: .radians(age * (4 + h(5) * 8) * (h(6) < 0.5 ? -1 : 1)))
                 let fade = min(1, age / 0.15) * (1 - pow(age / life, 3))
                 let color = Self.confettiColors[Int(h(7) * Double(Self.confettiColors.count))]
@@ -178,10 +260,6 @@ private struct Sparks: View {
             }
         }
     }
-}
-
-private func lerp(_ range: ClosedRange<Double>, _ x: Double) -> Double {
-    range.lowerBound + x * (range.upperBound - range.lowerBound)
 }
 
 /// Uniform pseudo-random value in [0, 1) from three integers (SplitMix64 mixing).

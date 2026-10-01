@@ -3,15 +3,23 @@ import Testing
 
 @Suite struct GreetingTimelineTests {
     @Test func everythingFinishesBeforeTheNotchCollapses() {
-        let lastSparkDies = GreetingTimeline.bursts.max()! + GreetingTimeline.sparkLifetime.upperBound
+        let lastSparkDies = GreetingTimeline.emitEnd + GreetingTimeline.pulseTravel
         #expect(lastSparkDies <= GreetingTimeline.duration)
-        #expect(GreetingTimeline.bow.upperBound <= GreetingTimeline.duration)
+        #expect(GreetingTimeline.settle.upperBound + GreetingTimeline.idleHold <= GreetingTimeline.duration)
         #expect(GreetingTimeline.glowFade.upperBound <= GreetingTimeline.duration)
     }
 
-    @Test func handsTuckBeforeTheBowEnds() {
-        #expect(GreetingTimeline.tuck.upperBound <= GreetingTimeline.bow.upperBound)
+    @Test func handsComeOutWaveGoodbyeAndTuckBeforeTheSettle() {
+        #expect(GreetingTimeline.open.upperBound <= GreetingTimeline.handsIn.lowerBound)
+        #expect(GreetingTimeline.handsIn.upperBound <= GreetingTimeline.goodbye.lowerBound)
         #expect(GreetingTimeline.goodbye.upperBound <= GreetingTimeline.tuck.lowerBound)
+        #expect(GreetingTimeline.tuck.upperBound <= GreetingTimeline.settle.upperBound)
+    }
+
+    @Test func overshootStartsAtZeroAndSettlesAtOne() {
+        #expect(abs(GreetingTimeline.overshoot(0, 1...2)) < 1e-9)
+        #expect(GreetingTimeline.overshoot(1.7, 1...2) > 1)
+        #expect(GreetingTimeline.overshoot(3, 1...2) == 1)
     }
 
     @Test func progressIsClampedAndEased() {

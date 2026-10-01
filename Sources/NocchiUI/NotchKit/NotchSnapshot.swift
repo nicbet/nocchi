@@ -46,7 +46,7 @@ public enum NotchSnapshot {
         }
         do {
             // Filmstrip of the greeting's choreography.
-            let times = [0.6, 1.6, 2.4, 2.8, 3.2, 3.9]
+            let times = [0.15, 0.6, 1.15, 1.6, 2.2, 2.6, 2.95, 3.5]
             let strip = VStack(spacing: 8) {
                 ForEach(times, id: \.self) { t in
                     HStack {
