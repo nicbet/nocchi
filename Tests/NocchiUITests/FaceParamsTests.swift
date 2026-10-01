@@ -86,3 +86,12 @@ import Testing
         #expect(motion.params(at: 11, motionTime: 0, seed: 0).body == green)
     }
 }
+
+@Suite struct FaceCalmnessTests {
+    /// Faces don't bob up and down; accessories carry the motion. Only the error shake moves the face.
+    @Test(arguments: Mood.allCases.filter { $0 != .error })
+    func facesStayInPlace(mood: Mood) {
+        let moves = stride(from: 0.0, to: 10, by: 0.05).contains { FaceParams.make(mood, t: $0, seed: 0.3).offset != .zero }
+        #expect(!moves)
+    }
+}

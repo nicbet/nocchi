@@ -5,7 +5,7 @@ import NocchiCore
 /// Everything that describes a face at one instant. Lengths are fractions of the face diameter.
 /// Moods are just different parameter sets, so changing mood is a plain interpolation.
 struct FaceParams: Equatable {
-    var offset = CGVector.zero      // nod, bounce, shake
+    var offset = CGVector.zero      // error shake
     var rotation = 0.0              // radians, head tilt
     var scale = 1.0                 // breathing
     var body = FacePalette.body(for: .idle)  // color means state
@@ -41,7 +41,7 @@ struct FaceParams: Equatable {
     }
 
     /// Parameters for `mood` at time `t` (seconds). `seed` desynchronizes faces from each other.
-    /// With `reduceMotion`, motion that moves the face (nod, bounce, shake, sway, breathing) is
+    /// With `reduceMotion`, motion that moves the face (shake, sway, breathing) is
     /// removed; blinks, gaze, pulses and twinkles stay.
     static func make(_ mood: Mood, t: Double, seed: Double, reduceMotion: Bool = false) -> Self {
         var p = makeAnimated(mood, t: t, seed: seed)
@@ -72,8 +72,8 @@ struct FaceParams: Equatable {
             p.gazeBias = CGVector(dx: 0.8 * sin(tt * 0.9), dy: -0.6 + 0.25 * sin(tt * 1.3))
             p.gazeWeight = 0
 
+        // No nodding or bouncing: the accessory (badge, sparkles, ring, zZz) carries the motion.
         case .working:
-            p.offset.dy = 0.035 * abs(sin(tt * .pi * 1.6))
             p.eyeHeight = 0.2 * blink(t, seed: seed + 0.5)
             p.gazeBias = CGVector(dx: 0.3 * sin(tt * 1.2), dy: 0.55)
             p.gazeWeight = 0.2
@@ -87,7 +87,6 @@ struct FaceParams: Equatable {
             p.ring = 0.6 + 0.4 * sin(tt * tau * 0.9)
 
         case .done:
-            p.offset.dy = -0.05 * abs(sin(tt * .pi * 1.4))
             p.eyeY = -0.01
             p.eyeWidth = 0.11
             p.eyeHeight = 0.09
