@@ -115,8 +115,10 @@ private struct StepCarousel: View {
     let mood: Mood
 
     var body: some View {
-        // Busy: the live step, with the one before it above. Otherwise what it last said. The
-        // face already shows the state, so the bottom line names the agent and its task.
+        // Busy: the live step, with the one before it above. Done or needs you: what it said,
+        // above the project and task. Idle: the project and task first, what it last said below.
+        // The face already shows the state.
+        let resting = mood == .idle || mood == .sleep
         VStack(alignment: .leading, spacing: 6) {
             if mood.isBusy, let previous = entry.previousStep {
                 row(previous, id: "previous") {
@@ -126,23 +128,53 @@ private struct StepCarousel: View {
                 .foregroundStyle(.white.opacity(0.38))
                 .lineLimit(1)
             }
-            row(entry.headline(mood), id: "headline") {
-                Image(systemName: mood.isBusy ? mood.symbol : "text.bubble").font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(mood.tint)
+            if resting {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "folder").font(.system(size: 10, weight: .semibold)).frame(width: 14)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.info.displayName)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        if let task = entry.info.title, !task.isEmpty, task != entry.info.displayName {
+                            Text(task)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    }
+                    .lineLimit(1)
+                }
+                .foregroundStyle(.white.opacity(0.7))
+                if let said = entry.lastMessage {
+                    row(said, id: "said") {
+                        Image(systemName: "text.bubble").font(.system(size: 10, weight: .semibold))
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(2)
+                }
+            } else {
+                row(entry.headline(mood), id: "headline") {
+                    Image(systemName: mood.isBusy ? mood.symbol : "text.bubble").font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(mood.tint)
+                }
+                // Live steps are short and bold; a message reads as prose.
+                .font(.system(size: mood.isBusy ? 15 : 13.5, weight: mood.isBusy ? .semibold : .medium))
+                .foregroundStyle(.white)
+                .lineLimit(mood.isBusy ? 2 : 3)
+                projectRow(lines: 1)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.42))
             }
-            // Live steps are short and bold; a message reads as prose.
-            .font(.system(size: mood.isBusy ? 15 : 13.5, weight: mood.isBusy ? .semibold : .medium))
-            .foregroundStyle(.white)
-            .lineLimit(mood.isBusy ? 2 : 3)
-            row(entry.projectAndTask, id: "meta") {
-                Image(systemName: "folder").font(.system(size: 10, weight: .semibold))
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white.opacity(0.42))
-            .lineLimit(1)
         }
         .animation(.spring(duration: 0.4, bounce: 0.15), value: entry.steps)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: mood)
+    }
+
+    private func projectRow(lines: Int) -> some View {
+        row(entry.projectAndTask, id: "project") {
+            Image(systemName: "folder").font(.system(size: 10, weight: .semibold))
+        }
+        .lineLimit(lines)
     }
 
     /// Icon in a fixed column so the texts line up; new text pushes in from below.
