@@ -1,8 +1,8 @@
 import NocchiCore
 import SwiftUI
 
-/// Collapsed: the primary agent's face on the left, the others on the right in one column (up to
-/// three) or two (up to six), or no right side at all when there's nobody else (`ClusterLayout`).
+/// Collapsed: the primary agent's face on the left, the others on the right in one or two columns
+/// (`ClusterLayout`), or no right side at all when there's nobody else.
 struct CollapsedView: View {
     let model: NotchModel
 

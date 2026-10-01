@@ -1,8 +1,7 @@
 import CoreGraphics
 
-/// How the other agents sit on the right of the collapsed notch. Counting the primary on the left:
-/// 1 agent, no right side; 2–4, one column of 1–3; 5–7, two columns (2×2 or 2×3); more, 2×3 with
-/// the last spot a "+N" badge. Fewer rows, larger faces.
+/// How the other agents sit on the right of the collapsed notch: as few columns and as large faces
+/// as the count allows, up to 2 columns × 3 rows; with nobody else, no right side at all.
 struct ClusterLayout: Equatable {
     var columns: Int
     var rows: Int
@@ -17,7 +16,7 @@ struct ClusterLayout: Equatable {
     static func make(count: Int, height h: CGFloat) -> ClusterLayout? {
         guard count > 0 else { return nil }
         let count = min(count, maxSpots)
-        let columns = count <= 3 ? 1 : 2
+        let columns = count <= 2 ? 1 : 2
         let rows = (count + columns - 1) / columns
         let gap = (h * 0.06).rounded()
         let faceSize: CGFloat = switch rows {
