@@ -12,6 +12,19 @@ public enum NotchSnapshot {
         var urls = try [NotchMode.collapsed, .expanded].map { mode in
             try render(previewStore(.showcase), mode: mode, geometry: geometry, scale: scale, to: directory.appendingPathComponent("notch-\(mode).png"))
         }
+        // The middle of a notch-less screen: a ticker message.
+        do {
+            var plain = geometry
+            plain.hasHardwareNotch = false
+            let store = previewStore(.crowd)
+            let model = NotchModel(geometry: plain, store: store)
+            model.ticker.announce(Ticker.Message(ref: AgentRef(adapter: "mock", localID: "x"), name: "Atlas", mood: .waiting))
+            urls.append(try render(model, mode: .collapsed, scale: scale, to: directory.appendingPathComponent("notch-ticker.png")))
+            model.ticker.stop()
+            model.ticker.announce(Ticker.Message(ref: AgentRef(adapter: "mock", localID: "x"), name: "Servaint-backend-migration", mood: .done))
+            urls.append(try render(model, mode: .collapsed, scale: scale, to: directory.appendingPathComponent("notch-ticker-long.png")))
+            model.ticker.stop()
+        }
         // More agents than spots: the overflow badge and chip.
         for mode in [NotchMode.collapsed, .expanded] {
             urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,
@@ -97,7 +110,10 @@ public enum NotchSnapshot {
     }
 
     private static func render(_ store: AgentStore, mode: NotchMode, geometry: NotchGeometry, scale: CGFloat, to url: URL) throws -> URL {
-        let model = NotchModel(geometry: geometry, store: store)
+        try render(NotchModel(geometry: geometry, store: store), mode: mode, scale: scale, to: url)
+    }
+
+    private static func render(_ model: NotchModel, mode: NotchMode, scale: CGFloat, to url: URL) throws -> URL {
         model.mode = mode
         let size = model.panelSize
         let view = NotchView(model: model)

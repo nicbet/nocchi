@@ -21,6 +21,12 @@ public final class NocchiSettings {
         didSet { defaults.set(autoPeek, forKey: Keys.autoPeek) }
     }
 
+    /// Show messages and a summary in the middle of the collapsed notch on screens without a
+    /// hardware notch.
+    public var showsStatusText: Bool {
+        didSet { defaults.set(showsStatusText, forKey: Keys.showsStatusText) }
+    }
+
     /// A named Herdr session to watch instead of the default one.
     public var herdrSession: String? {
         didSet { defaults.set(herdrSession, forKey: Keys.herdrSession) }
@@ -35,6 +41,7 @@ public final class NocchiSettings {
         self.defaults = defaults
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
         autoPeek = defaults.object(forKey: Keys.autoPeek) as? Bool ?? true
+        showsStatusText = defaults.object(forKey: Keys.showsStatusText) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
@@ -42,6 +49,7 @@ public final class NocchiSettings {
     private enum Keys {
         static let ignoresReduceMotion = "ignoresReduceMotion"
         static let autoPeek = "autoPeek"
+        static let showsStatusText = "showsStatusText"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
     }

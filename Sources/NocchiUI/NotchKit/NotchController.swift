@@ -70,6 +70,7 @@ public final class NotchController {
         hoverPoll?.cancel()
         pendingModeChange?.cancel()
         peekEnd?.cancel()
+        model.ticker.stop()
         panel.orderOut(nil)
     }
 
@@ -83,7 +84,12 @@ public final class NotchController {
         } onChange: { [weak self] in
             Task { @MainActor in self?.observeMoods() }
         }
-        if let peek = peekTracker.update(moods) { self.peek(peek) }
+        let entered = peekTracker.update(moods)
+        if let first = entered.first { peek(first) }
+        for peek in entered {
+            guard let entry = store.state.agents[peek.ref] else { continue }
+            model.ticker.announce(Ticker.Message(ref: peek.ref, name: entry.info.displayName, mood: peek.mood))
+        }
     }
 
     /// Opens the notch for a moment when an agent needs you, failed or finished. The expanded

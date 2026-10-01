@@ -20,18 +20,19 @@ struct PeekTracker {
         }
     }
 
-    /// Feed the current moods; returns the most urgent new peek, if any.
-    mutating func update(_ current: [AgentRef: Mood]) -> Peek? {
+    /// Feed the current moods; returns every agent that just entered an attention mood, most
+    /// urgent first. The notch peeks for the first; the ticker announces them all.
+    mutating func update(_ current: [AgentRef: Mood]) -> [Peek] {
         defer { moods = current }
-        guard let previous = moods else { return nil }
+        guard let previous = moods else { return [] }
         let entered = current.compactMap { ref, mood -> Peek? in
             guard previous[ref] != mood, let duration = Self.duration(for: mood) else { return nil }
             return Peek(ref: ref, mood: mood, duration: duration)
         }
-        return entered.min { Self.rank($0.mood) < Self.rank($1.mood) || (Self.rank($0.mood) == Self.rank($1.mood) && $0.ref.localID < $1.ref.localID) }
+        return entered.sorted { (Self.rank($0.mood), $0.ref.localID) < (Self.rank($1.mood), $1.ref.localID) }
     }
 
-    private static func rank(_ mood: Mood) -> Int {
+    static func rank(_ mood: Mood) -> Int {
         switch mood {
         case .waiting: 0
         case .error: 1

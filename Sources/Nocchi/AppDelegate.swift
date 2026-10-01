@@ -51,6 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         autoPeek.state = NocchiSettings.shared.autoPeek ? .on : .off
         autoPeek.toolTip = "Open the notch for a moment when an agent needs you, failed or finished."
         menu.addItem(autoPeek)
+        let statusText = NSMenuItem(title: "Show Status Text", action: #selector(toggleStatusText(_:)), keyEquivalent: "")
+        statusText.target = self
+        statusText.state = NocchiSettings.shared.showsStatusText ? .on : .off
+        statusText.toolTip = "On screens without a notch, show messages like “Nocchi finished” between the faces."
+        menu.addItem(statusText)
         menu.addItem(.separator())
         menu.addItem(demoMenuItem())
         menu.addItem(debugMenuItem())
@@ -87,6 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let socket = Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)
             store.run(HerdrAdapter(socketPath: socket, revealsTerminal: true))
         }
+    }
+
+    @objc private func toggleStatusText(_ sender: NSMenuItem) {
+        NocchiSettings.shared.showsStatusText.toggle()
+        sender.state = NocchiSettings.shared.showsStatusText ? .on : .off
     }
 
     @objc private func toggleAutoPeek(_ sender: NSMenuItem) {

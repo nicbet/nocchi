@@ -31,6 +31,8 @@ public final class NotchModel {
     public var showsHitArea = false
 
     public let store: AgentStore
+    /// Short messages for the middle of the collapsed notch on screens without a hardware notch.
+    public let ticker = Ticker()
     /// The launch greeting is showing.
     public var isGreeting = false
 

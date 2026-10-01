@@ -49,6 +49,25 @@ extension AgentStore {
         return connected ? .idle : .sleep
     }
 
+    /// The two most important of "1 needs you", "2 working", "1 done", or nil when nothing is
+    /// going on. Two parts fit the middle of the notch without truncating.
+    var statusSummary: String? {
+        var needs = 0, working = 0, done = 0
+        for entry in state.agents.values {
+            switch mood(of: entry) {
+            case .waiting, .error: needs += 1
+            case .working, .thinking: working += 1
+            case .done: done += 1
+            case .idle, .sleep: break
+            }
+        }
+        var parts: [String] = []
+        if needs > 0 { parts.append(needs == 1 ? "1 needs you" : "\(needs) need you") }
+        if working > 0 { parts.append("\(working) working") }
+        if done > 0 { parts.append("\(done) done") }
+        return parts.isEmpty ? nil : parts.prefix(2).joined(separator: " · ")
+    }
+
     /// Why no source is connected ("Herdr isn't running"), if none is.
     var unavailableReason: String? {
         var reason: String?

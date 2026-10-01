@@ -14,7 +14,12 @@ struct CollapsedView: View {
             FaceView(mood: store.primary.map(store.mood(of:)) ?? store.emptyMood,
                      size: (h * 0.66).rounded(), seed: store.primary?.faceSeed ?? 0.37)
                 .frame(width: model.earWidth, height: h)
-            Spacer(minLength: model.geometry.notchSize.width)
+            if !model.geometry.hasHardwareNotch && NocchiSettings.shared.showsStatusText {
+                StatusText(model: model)
+                    .frame(width: model.geometry.notchSize.width, height: h)
+            } else {
+                Spacer(minLength: model.geometry.notchSize.width)
+            }
             Grid(horizontalSpacing: h * 0.06, verticalSpacing: h * 0.06) {
                 GridRow { face(others, 0); face(others, 1) }
                 GridRow { face(others, 2); face(others, 3, hidden: hidden) }
@@ -54,5 +59,44 @@ struct OverflowBadge: View {
             .background(Circle().fill(mood.tint.opacity(0.22)))
             .overlay(Circle().strokeBorder(mood.tint.opacity(0.5), lineWidth: 1))
             .help("\(count) more agents")
+    }
+}
+
+/// The middle of the collapsed notch on screens without a hardware notch: the ticker's current
+/// message, else a dim summary. Never widens the notch; long text is truncated.
+private struct StatusText: View {
+    let model: NotchModel
+    @Environment(\.nocchiReducesMotion) private var reduceMotion
+
+    var body: some View {
+        let message = model.ticker.current
+        let summary = model.store.statusSummary
+        ZStack {
+            if let message {
+                Text(message.text)
+                    .foregroundStyle(message.mood.tint)
+                    .id("message \(message.text)")
+                    .transition(transition)
+            } else if let summary {
+                Text(summary)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .id("summary \(summary)")
+                    .transition(transition)
+            }
+        }
+        .font(.system(size: (model.geometry.notchSize.height * 0.46).rounded(), weight: .semibold, design: .rounded))
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .animation(reduceMotion ? .easeInOut(duration: 0.25) : .spring(duration: 0.4, bounce: 0.2), value: message?.text ?? summary)
+    }
+
+    private var transition: AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .move(edge: .top).combined(with: .opacity)
+        )
     }
 }
