@@ -21,9 +21,42 @@ final class IsolatedHerdr: Sendable {
     /// `nil` when Herdr isn't installed.
     static func start() throws -> IsolatedHerdr? {
         guard let executable = findHerdr() else { return nil }
+        sweepOnce(executable)
         let herdr = try IsolatedHerdr(executable: executable)
         try herdr.launch()
         return herdr
+    }
+
+    private static let swept = Mutex(false)
+
+    /// A crashed test run can't stop its servers, so the first harness of a run removes leftover
+    /// `nocchi-it-*` sessions (and their /tmp folders).
+    private static func sweepOnce(_ executable: URL) {
+        guard swept.withLock({ done in defer { done = true }; return !done }) else { return }
+        let list = Process()
+        list.executableURL = executable
+        list.arguments = ["session", "list"]
+        list.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("HERDR_") }
+        let pipe = Pipe()
+        list.standardOutput = pipe
+        list.standardError = FileHandle.nullDevice
+        guard (try? list.run()) != nil else { return }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        list.waitUntilExit()
+        for line in output.split(separator: "\n") {
+            guard let name = line.split(separator: " ").first, name.hasPrefix("nocchi-it-") else { continue }
+            for arguments in [["session", "stop", String(name)], ["session", "delete", String(name)]] {
+                let command = Process()
+                command.executableURL = executable
+                command.arguments = arguments
+                command.environment = list.environment
+                command.standardOutput = FileHandle.nullDevice
+                command.standardError = FileHandle.nullDevice
+                try? command.run()
+                command.waitUntilExit()
+            }
+            try? FileManager.default.removeItem(atPath: "/tmp/\(name)")
+        }
     }
 
     static func findHerdr() -> URL? {

@@ -18,7 +18,7 @@ public struct MockScenario: Sendable, Identifiable {
     public static let empty = MockScenario(name: "Empty", agents: [])
 
     /// Every built-in scenario, for the demo menu.
-    public static let all: [MockScenario] = [.showcase, .quiet, .needsYou, .failure, .crowd]
+    public static let all: [MockScenario] = [.showcase, .calm, .quiet, .needsYou, .failure, .crowd]
 
     /// Five agents going through every state in a loop (about 45 s).
     public static let showcase = MockScenario(
@@ -54,6 +54,25 @@ public struct MockScenario: Sendable, Identifiable {
 
     /// No agents at all.
     public static let quiet = MockScenario(name: "Quiet", agents: [])
+
+    /// One agent at work, the rest idle: the cluster folds into a pill, and unfolds while one of
+    /// them wakes up for a turn (about 20 s loop).
+    public static let calm = MockScenario(
+        name: "Calm",
+        agents: [
+            MockAgent("nocchi", name: "nocchi", status: .working, title: "Polishing the notch", focused: true),
+            MockAgent("docs", name: "docs", status: .idle, title: "Updated README"),
+            MockAgent("api", name: "api", status: .idle, title: "Ready"),
+            MockAgent("web", kind: .codex, name: "web", status: .idle, title: "Ready"),
+            MockAgent("infra", name: "infra", status: .idle, title: "Ready"),
+        ],
+        script: [
+            MockStep(after: 6, .status("api", .working, title: "Bumping dependencies")),
+            MockStep(after: 4, .finish("api", .idle)),
+            MockStep(after: 10, .step("nocchi", "Polishing the notch")),
+        ],
+        loops: true
+    )
 
     /// One agent waiting for approval while others work.
     public static let needsYou = MockScenario(

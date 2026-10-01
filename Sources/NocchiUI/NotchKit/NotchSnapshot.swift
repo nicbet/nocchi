@@ -44,6 +44,9 @@ public enum NotchSnapshot {
             if let primary = store.primary { model.prompt = .composing(primary.ref) }
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
         }
+        // Everyone else calm: the cluster folds into a pill.
+        urls.append(try render(previewStore(.calm), mode: .collapsed, geometry: geometry, scale: scale,
+                               to: directory.appendingPathComponent("notch-calm-collapsed.png")))
         // More agents than spots: the overflow badge and chip.
         for mode in [NotchMode.collapsed, .expanded] {
             urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,
