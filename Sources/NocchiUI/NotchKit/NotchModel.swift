@@ -27,6 +27,8 @@ public final class NotchModel {
     public var showsHitArea = false
 
     public let store: AgentStore
+    /// The launch greeting is showing.
+    public var isGreeting = false
 
     /// Faces stop animating while the displays sleep. (Window occlusion isn't used: for a
     /// transparent, always-on-top panel it can report "not visible" while the notch is on screen.)

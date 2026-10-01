@@ -28,6 +28,22 @@ public enum NotchSnapshot {
             try data.write(to: url)
             return url
         }
+        do {
+            let model = NotchModel(geometry: geometry, store: previewStore(.quiet))
+            model.isGreeting = true
+            model.mode = .expanded
+            let size = model.panelSize
+            let renderer = ImageRenderer(content: NotchView(model: model)
+                .frame(width: size.width, height: size.height)
+                .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                .facesRenderStill())
+            renderer.scale = scale
+            if let image = renderer.cgImage, let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                let url = directory.appendingPathComponent("notch-greeting.png")
+                try data.write(to: url)
+                urls.append(url)
+            }
+        }
         for scenario in [MockScenario.needsYou, .failure] {
             let model = NotchModel(geometry: geometry, store: previewStore(scenario))
             model.mode = .expanded

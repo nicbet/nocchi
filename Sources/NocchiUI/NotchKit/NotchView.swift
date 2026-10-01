@@ -46,6 +46,9 @@ struct NotchView: View {
         case .collapsed:
             CollapsedView(model: model)
                 .transition(.blurReplace)
+        case .expanded where model.isGreeting:
+            GreetingView(model: model)
+                .transition(.blurReplace)
         case .expanded:
             OverviewView(model: model)
                 .transition(.blurReplace.combined(with: .scale(0.96, anchor: .top)))

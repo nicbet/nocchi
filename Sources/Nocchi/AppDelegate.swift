@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Show Hit Area", action: #selector(debugToggleHitArea(_:)), keyEquivalent: "h").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Mood Gallery…", action: #selector(debugShowGallery), keyEquivalent: "g").target = self
+        menu.addItem(withTitle: "Replay Greeting", action: #selector(debugGreet), keyEquivalent: "r").target = self
 
         let item = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
         item.submenu = menu
@@ -107,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func debugShowGallery() { gallery.show() }
+    @objc private func debugGreet() { notch?.greet() }
 
     @objc private func debugToggleHitArea(_ sender: NSMenuItem) {
         guard let notch else { return }

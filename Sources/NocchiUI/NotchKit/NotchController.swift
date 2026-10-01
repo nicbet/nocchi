@@ -30,9 +30,13 @@ public final class NotchController {
         panel.contentView = host
     }
 
-    public func start() {
+    /// How long the launch greeting stays open.
+    private let greetingDuration: Duration = .seconds(3)
+
+    public func start(greeting: Bool = true) {
         layout()
         panel.orderFrontRegardless()
+        if greeting { greet() }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackMouse() }
@@ -60,6 +64,18 @@ public final class NotchController {
         hoverPoll?.cancel()
         pendingModeChange?.cancel()
         panel.orderOut(nil)
+    }
+
+    /// Opens the notch with the greeting, then collapses (unless the pointer is over it).
+    public func greet() {
+        model.isGreeting = true
+        setMode(.expanded)
+        Task { [weak self] in
+            try? await Task.sleep(for: self?.greetingDuration ?? .seconds(3))
+            guard let self else { return }
+            model.isGreeting = false
+            if !model.isHovering && !model.isPinned { setMode(.collapsed) }
+        }
     }
 
     // MARK: Debug controls
