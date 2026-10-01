@@ -37,7 +37,7 @@ extension Mood {
 
     var symbol: String {
         switch self {
-        case .idle: "circle"
+        case .idle: "text.alignleft"
         case .thinking: "ellipsis"
         case .working: "terminal"
         case .waiting: "hand.raised"

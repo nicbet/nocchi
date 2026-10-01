@@ -44,6 +44,13 @@ public enum NotchSnapshot {
             if let primary = store.primary { model.prompt = .composing(primary.ref) }
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
         }
+        // An idle primary shows its task instead of its last tool call.
+        do {
+            let store = previewStore(.calm)
+            store.select(AgentRef(adapter: "mock", localID: "docs"))
+            urls.append(try render(store, mode: .expanded, geometry: geometry, scale: scale,
+                                   to: directory.appendingPathComponent("notch-idle-expanded.png")))
+        }
         // Everyone else calm: the cluster folds into a pill.
         urls.append(try render(previewStore(.calm), mode: .collapsed, geometry: geometry, scale: scale,
                                to: directory.appendingPathComponent("notch-calm-collapsed.png")))

@@ -115,34 +115,47 @@ private struct StepCarousel: View {
     let mood: Mood
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            line(entry.previousStep, symbol: "checkmark", size: 12, opacity: 0.4)
-            line(entry.currentStep ?? mood.label, symbol: mood.symbol, size: 15, opacity: 1, weight: .semibold)
-            line("\(entry.info.displayName) · \(mood.label)", symbol: "person.crop.circle", size: 12, opacity: 0.4)
+        // Busy: the live step, with the one before it above. Otherwise what it's about: the task.
+        let busy = mood == .working || mood == .thinking || mood == .waiting
+        let headline = busy ? entry.currentStep ?? mood.label : entry.info.title ?? entry.currentStep ?? entry.info.displayName
+        VStack(alignment: .leading, spacing: 6) {
+            if busy, let previous = entry.previousStep {
+                row(previous, id: "previous") {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy))
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.38))
+                .lineLimit(1)
+            }
+            row(headline, id: "headline") {
+                Image(systemName: mood.symbol).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(mood.tint)
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(2)
+            row("\(entry.info.displayName) · \(mood.label)", id: "meta") {
+                // A shape's baseline is its bottom: lift it to the middle of the text.
+                Circle().fill(mood.tint).frame(width: 6, height: 6).offset(y: -3)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.42))
+            .lineLimit(1)
         }
         .animation(.spring(duration: 0.4, bounce: 0.15), value: entry.steps)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: mood)
     }
 
-    @ViewBuilder
-    private func line(_ text: String?, symbol: String, size: CGFloat, opacity: Double, weight: Font.Weight = .regular) -> some View {
-        ZStack(alignment: .leading) {
-            if let text {
-                Label {
-                    Text(text).lineLimit(1).truncationMode(.tail)
-                } icon: {
-                    Image(systemName: symbol).frame(width: size + 4)
-                }
-                .font(.system(size: size, weight: weight))
-                .foregroundStyle(.white.opacity(opacity))
-                .id(text)
-                .transition(.asymmetric(
-                    insertion: .push(from: .bottom).combined(with: .opacity),
-                    removal: .push(from: .bottom).combined(with: .opacity)
-                ))
-            }
+    /// Icon in a fixed column so the texts line up; new text pushes in from below.
+    private func row(_ text: String, id: String, @ViewBuilder icon: () -> some View) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            icon().frame(width: 14)
+            Text(text)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+                .id("\(id) \(text)")
+                .transition(.push(from: .bottom).combined(with: .opacity))
         }
-        .frame(height: size + 6, alignment: .leading)
         .clipped()
     }
 }
