@@ -68,6 +68,8 @@ public final class AgentStore {
         try await adapter.perform(action)
     }
 
+    public func isRunning(_ id: AdapterID) -> Bool { runs[id] != nil }
+
     /// Whether any running adapter can start new agents.
     public var canStartAgents: Bool {
         runs.values.contains { $0.adapter.capabilities.contains(.start) }

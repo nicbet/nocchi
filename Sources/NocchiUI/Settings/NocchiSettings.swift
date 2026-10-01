@@ -37,6 +37,15 @@ public final class NocchiSettings {
         didSet { defaults.set(screenName, forKey: Keys.screenName) }
     }
 
+    /// Agent sources. Herdr: agents in Herdr panes. Claude Code: Claude sessions anywhere else
+    /// (read from Claude's own session registry; no setup).
+    public var usesHerdr: Bool {
+        didSet { defaults.set(usesHerdr, forKey: Keys.usesHerdr) }
+    }
+    public var watchesClaude: Bool {
+        didSet { defaults.set(watchesClaude, forKey: Keys.watchesClaude) }
+    }
+
     /// A named Herdr session to watch instead of the default one.
     public var herdrSession: String? {
         didSet { defaults.set(herdrSession, forKey: Keys.herdrSession) }
@@ -54,6 +63,8 @@ public final class NocchiSettings {
         showsStatusText = defaults.object(forKey: Keys.showsStatusText) as? Bool ?? true
         playsSounds = defaults.bool(forKey: Keys.playsSounds)
         screenName = defaults.string(forKey: Keys.screenName)
+        usesHerdr = defaults.object(forKey: Keys.usesHerdr) as? Bool ?? true
+        watchesClaude = defaults.object(forKey: Keys.watchesClaude) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
     }
@@ -64,6 +75,8 @@ public final class NocchiSettings {
         static let showsStatusText = "showsStatusText"
         static let playsSounds = "playsSounds"
         static let screenName = "screenName"
+        static let usesHerdr = "usesHerdr"
+        static let watchesClaude = "watchesClaude"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
     }
