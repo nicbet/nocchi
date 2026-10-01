@@ -8,6 +8,12 @@ extension AgentEntry {
 
     /// The step being worked on now: the latest step, else the title.
     var currentStep: String? { steps.last ?? info.title }
+    /// For a chip: the live step while the agent is busy, else what it's about (its title).
+    func chipText(_ mood: Mood) -> String {
+        let busy = mood == .working || mood == .thinking || mood == .waiting
+        return (busy ? currentStep : info.title ?? currentStep) ?? info.displayName
+    }
+
     /// The step before it.
     var previousStep: String? { steps.count >= 2 ? steps[steps.count - 2] : nil }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import NocchiClaude
 import NocchiCore
 import NocchiHerdr
 import NocchiUI
@@ -10,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var notch: NotchController?
     private let gallery = MoodGalleryWindow()
     private let store = AgentStore()
+    private lazy var claudeActivity = ClaudeActivityFeed(store: store)
     /// A demo scenario that replaces Herdr while it runs. `--demo <name>` starts with one.
     private var demo: MockScenario?
     private let connectionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -21,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             demo = MockScenario.all.first { $0.name == name } ?? .showcase
         }
         startSource()
+        claudeActivity.start()
         let notch = NotchController(store: store)
         notch.start()
         self.notch = notch

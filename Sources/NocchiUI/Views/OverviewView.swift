@@ -209,7 +209,7 @@ private struct AgentChip: View {
         HStack(spacing: 7) {
             FaceView(mood: mood, size: 20, seed: entry.faceSeed)
                 .frame(width: 22, height: 22)
-            Text(entry.currentStep ?? entry.info.displayName)
+            Text(entry.chipText(mood))
                 .font(.system(size: 12, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)

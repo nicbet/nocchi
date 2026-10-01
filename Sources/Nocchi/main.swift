@@ -1,4 +1,5 @@
 import AppKit
+import NocchiClaude
 import NocchiCore
 import NocchiHerdr
 import NocchiUI
@@ -26,10 +27,13 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
         let store = AgentStore()
         let settings = NocchiSettings.shared
         store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        let activity = ClaudeActivityFeed(store: store)
+        activity.start()
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(2.5))
+            activity.stop()
             for entry in store.state.agents.values.sorted(by: { $0.slot < $1.slot }) {
-                print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.info.title ?? "")\(entry.info.isFocused ? " [focused]" : "")")
+                print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.steps.joined(separator: " → "))\(entry.info.isFocused ? " [focused]" : "")")
             }
             print(store.state.connections)
             finish { try NotchSnapshot.writeLive(store, to: URL(fileURLWithPath: dir), geometry: geometry) }
