@@ -1,8 +1,7 @@
 import NocchiCore
 import SwiftUI
 
-/// Expanded: a focus card for the primary agent (face + step carousel) and a narrow column of the
-/// other agents' faces, which widens into chips while the pointer is over it.
+/// Expanded: a focus card for the primary agent (face + step carousel) and chips for the others.
 struct OverviewView: View {
     let model: NotchModel
     /// The focus card grows into the composer and shrinks back.
@@ -30,27 +29,11 @@ struct OverviewView: View {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
                         .transition(.blurReplace)
                 } else {
-                    let hasOthers = !store.others.isEmpty
-                    let fanned = model.chipsFanned && hasOthers
                     HStack(spacing: Self.cardSpacing) {
                         FocusCard(model: model, card: card)
-                            .frame(width: fanned ? Self.focusWidth(bodyWidth: body.width)
-                                   : Self.wideFocusWidth(bodyWidth: body.width, hasOthers: hasOthers))
-                        Group {
-                            if fanned {
-                                ChipsCard(store: store, card: card)
-                                    .transition(.opacity)
-                            } else if hasOthers {
-                                FaceColumn(store: store, excluding: store.primary?.ref, background: Capsule()
-                                    .fill(.white.opacity(0.06))
-                                    .matchedGeometryEffect(id: "others", in: card))
-                                    .frame(maxHeight: .infinity)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .entersAfterComposer(model.composerJustClosed)
+                            .frame(width: Self.focusWidth(bodyWidth: body.width))
+                        ChipsCard(store: store, fanned: model.chipsFanned, waits: model.composerJustClosed)
                     }
-                    .animation(.spring(duration: 0.4, bounce: 0.18), value: fanned)
                     .transition(.opacity)
                 }
             }
@@ -71,22 +54,14 @@ extension OverviewView {
     static let gutter: CGFloat = 18
     static let cardSpacing: CGFloat = 10
 
-    /// The focus card beside the fanned-out chips.
     static func focusWidth(bodyWidth: CGFloat) -> CGFloat {
         (bodyWidth - 2 * gutter - cardSpacing) * 0.52
     }
 
-    /// The focus card beside the narrow face column (or alone).
-    static func wideFocusWidth(bodyWidth: CGFloat, hasOthers: Bool) -> CGFloat {
-        bodyWidth - 2 * gutter - (hasOthers ? cardSpacing + FaceColumn<AnyView>.width : 0)
-    }
-
-    /// Where the pointer fans the chips out, in the expanded body, top-left origin: the face
-    /// column (with some slack, it's narrow) or, once fanned, the chips card.
-    static func othersFrame(body: CGSize, notchHeight: CGFloat, fanned: Bool) -> CGRect {
-        let x = fanned
-            ? gutter + focusWidth(bodyWidth: body.width) + cardSpacing
-            : body.width - gutter - FaceColumn<AnyView>.width - 16
+    /// The chips card in the expanded body, top-left origin. The controller hit-tests it to fan
+    /// the chips out.
+    static func chipsFrame(body: CGSize, notchHeight: CGFloat) -> CGRect {
+        let x = gutter + focusWidth(bodyWidth: body.width) + cardSpacing
         let y = notchHeight + 8
         return CGRect(x: x, y: y, width: body.width - gutter - x, height: body.height - 16 - y)
     }
@@ -186,76 +161,103 @@ private struct StepCarousel: View {
 }
 
 /// One chip per other agent, two columns, tinted by state.
-/// The other agents as chips, two columns, tinted by state. Grows out of the face column, and the
-/// chips fly out of it one after another.
+/// The other agents: folded into a stack of faces until the pointer comes over the card, then
+/// fanned out into chips one by one.
 private struct ChipsCard: View {
     let store: AgentStore
-    let card: Namespace.ID
-    @State private var appeared = false
+    let fanned: Bool
+    /// Slide in only once the focus card is back in place, instead of overlapping it.
+    @State private var shown: Bool
     static let maxChips = 4
 
-    var body: some View {
-        let (visible, hidden) = store.others(fitting: Self.maxChips)
-        let overflow = hidden.count
-        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            ForEach(0..<2, id: \.self) { row in
-                GridRow {
-                    ForEach(0..<2, id: \.self) { column in
-                        let index = row * 2 + column
-                        Group {
-                            if index < visible.count {
-                                AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
-                                    .onAgentClick(help: "Show \(visible[index].info.displayName)") {
-                                        store.select(visible[index].ref)
-                                    }
-                            } else if index == visible.count, overflow > 0 {
-                                OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
-                            } else {
-                                Color.clear.frame(height: 34)
-                            }
-                        }
-                        .opacity(appeared ? 1 : 0)
-                        .scaleEffect(appeared ? 1 : 0.4, anchor: .trailing)
-                        .offset(x: appeared ? 0 : (column == 0 ? 150 : 40))
-                        .animation(.spring(duration: 0.4, bounce: 0.25).delay(Double(index) * 0.05), value: appeared)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.white.opacity(0.06))
-                .matchedGeometryEffect(id: "others", in: card)
-        }
-        .animation(.spring(duration: 0.4, bounce: 0.15), value: store.others.map(\.ref))
-        .onAppear { appeared = true }
-    }
-}
-
-extension View {
-    /// After the composer closes, wait for the focus card to shrink back before appearing.
-    func entersAfterComposer(_ waits: Bool) -> some View {
-        modifier(EntersAfterComposer(waits: waits))
-    }
-}
-
-private struct EntersAfterComposer: ViewModifier {
-    @State private var shown: Bool
-
-    init(waits: Bool) {
+    init(store: AgentStore, fanned: Bool, waits: Bool) {
+        self.store = store
+        self.fanned = fanned
         _shown = State(initialValue: !waits)
     }
 
-    func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .offset(x: shown ? 0 : 16)
-            .onAppear {
-                guard !shown else { return }
-                withAnimation(.spring(duration: 0.3, bounce: 0.15).delay(0.18)) { shown = true }
+    var body: some View {
+        let others = store.others
+        let (visible, hidden) = store.others(fitting: Self.maxChips)
+        let overflow = hidden.count
+        Group {
+            if others.isEmpty {
+                Text("No other agents").font(.system(size: 12)).foregroundStyle(.secondary)
+            } else if !fanned {
+                FoldedStack(store: store, entries: Array(others.prefix(Self.maxChips)), total: others.count)
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+            } else {
+                Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+                    ForEach(0..<2, id: \.self) { row in
+                        GridRow {
+                            ForEach(0..<2, id: \.self) { column in
+                                let index = row * 2 + column
+                                if index < visible.count {
+                                    AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
+                                        .onAgentClick(help: "Show \(visible[index].info.displayName)") {
+                                            store.select(visible[index].ref)
+                                        }
+                                        .transition(Self.fanOut(index))
+                                } else if index == visible.count, overflow > 0 {
+                                    OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
+                                        .transition(Self.fanOut(index))
+                                } else {
+                                    Color.clear.frame(height: 34)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(0.06)))
+        .animation(.spring(duration: 0.4, bounce: 0.15), value: others.map(\.ref))
+        .animation(.spring(duration: 0.4, bounce: 0.25), value: fanned)
+        .opacity(shown ? 1 : 0)
+        .offset(x: shown ? 0 : 16)
+        .onAppear {
+            guard !shown else { return }
+            withAnimation(.spring(duration: 0.3, bounce: 0.15).delay(0.18)) { shown = true }
+        }
+    }
+}
+
+extension ChipsCard {
+    /// Each chip flies out from the stack in the middle, one after another; folding is a quick fade.
+    static func fanOut(_ index: Int) -> AnyTransition {
+        let column = index % 2, row = index / 2
+        return .asymmetric(
+            insertion: .scale(scale: 0.4)
+                .combined(with: .opacity)
+                .combined(with: .offset(x: column == 0 ? 60 : -60, y: row == 0 ? 22 : -22))
+                .animation(.spring(duration: 0.4, bounce: 0.25).delay(Double(index) * 0.05)),
+            removal: .opacity.animation(.easeOut(duration: 0.12))
+        )
+    }
+}
+
+/// Overlapping faces and a count, standing in for the chips.
+private struct FoldedStack: View {
+    let store: AgentStore
+    let entries: [AgentEntry]
+    let total: Int
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: -10) {
+                ForEach(Array(entries.enumerated()), id: \.element.ref) { index, entry in
+                    FaceView(mood: store.mood(of: entry), size: 30, seed: entry.faceSeed)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(.black).padding(1))
+                        .zIndex(Double(entries.count - index))
+                }
+            }
+            Text(total == 1 ? "1 other agent" : "\(total) other agents")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45))
+        }
     }
 }
 

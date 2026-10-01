@@ -101,11 +101,10 @@ public final class NotchModel {
 
     // MARK: Metrics
 
-    /// Where the pointer fans out the other agents (the face column, or the chips once fanned), in
-    /// screen coordinates.
+    /// The expanded chips card in screen coordinates.
     var chipsScreenRect: CGRect {
         let body = bodySize(for: .expanded)
-        let local = OverviewView.othersFrame(body: body, notchHeight: geometry.notchSize.height, fanned: chipsFanned)
+        let local = OverviewView.chipsFrame(body: body, notchHeight: geometry.notchSize.height)
         let bodyRect = geometry.rectHanging(body)
         return CGRect(x: bodyRect.minX + local.minX, y: bodyRect.maxY - local.maxY, width: local.width, height: local.height)
     }
