@@ -39,7 +39,9 @@ struct OverviewView: View {
             }
             .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
-            .animation(.spring(duration: 0.5, bounce: 0.2), value: model.prompt.target)
+            // Opening takes its time; closing is quick.
+            .animation(model.prompt.target == nil ? .spring(duration: 0.28, bounce: 0.05) : .spring(duration: 0.5, bounce: 0.2),
+                       value: model.prompt.target)
 
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
@@ -194,7 +196,7 @@ private struct ChipsCard: View {
         .offset(x: shown ? 0 : 16)
         .onAppear {
             guard !shown else { return }
-            withAnimation(.spring(duration: 0.35, bounce: 0.15).delay(0.32)) { shown = true }
+            withAnimation(.spring(duration: 0.3, bounce: 0.15).delay(0.18)) { shown = true }
         }
     }
 }
