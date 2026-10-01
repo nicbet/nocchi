@@ -3,7 +3,7 @@ import Testing
 
 @Suite struct GreetingTimelineTests {
     @Test func everythingFinishesBeforeTheNotchCollapses() {
-        let lastSparkDies = max(GreetingTimeline.emitEnd, GreetingTimeline.bursts.max()!) + GreetingTimeline.sparkLifetime.upperBound
+        let lastSparkDies = GreetingTimeline.bursts.max()! + GreetingTimeline.sparkLifetime.upperBound
         #expect(lastSparkDies <= GreetingTimeline.duration)
         #expect(GreetingTimeline.bow.upperBound <= GreetingTimeline.duration)
         #expect(GreetingTimeline.glowFade.upperBound <= GreetingTimeline.duration)

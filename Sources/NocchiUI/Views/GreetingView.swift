@@ -3,18 +3,19 @@ import SwiftUI
 
 /// The greeting's choreography. Everything finishes before `duration`, when the notch collapses.
 enum GreetingTimeline {
-    /// Rings of sparks fired outward from the face.
-    static let bursts: [Double] = [0, 0.55, 1.1, 1.65]
-    static let sparksPerBurst = 170
-    /// Steady sparkle between the bursts. No new sparks after `emitEnd`; the ones in flight
-    /// finish their lives.
-    static let emitEnd = 2.0
-    static let sparkLifetime = 1.2...1.9
+    /// Shockwave rings of sparks, fired from the face every 0.3 s until `emitEnd`.
+    static let bursts: [Double] = Array(stride(from: 0, through: 1.8, by: 0.3))
+    static let sparksPerRing = 900
+    static let emitEnd = 1.8
+    /// How long a ring lives; it has left the card by then.
+    static let sparkLifetime = 1.6...1.8
+    /// Confetti pieces thrown out with the first rings.
+    static let confettiCount = 24
 
     /// Glow strength: a base level plus a flare after each burst.
     static func glow(_ t: Double) -> Double {
-        let flare = bursts.reduce(0) { sum, burst in t >= burst ? sum + exp(-(t - burst) * 5) : sum }
-        return (0.6 + 0.5 * min(1, flare)) * (1 - progress(t, glowFade))
+        let flare = bursts.reduce(0) { sum, burst in t >= burst ? sum + exp(-(t - burst) * 8) : sum }
+        return (0.6 + 0.4 * min(1, flare)) * (1 - progress(t, glowFade))
     }
     /// The wave speeds up into a goodbye, then the hands tuck into the face.
     static let goodbye = 2.2...2.6
@@ -116,64 +117,66 @@ private struct WavingFace: View {
     }
 }
 
-/// A celebration: rings of sparks bursting out of the face, plus a steady sparkle in between.
+/// A celebration: shockwave rings of tiny sparks expanding out of the face, plus confetti.
+/// The card is wide and short, so mostly the left and right arcs of each ring are visible,
+/// moving outward as bands.
 private struct Sparks: View {
     let t: Double
-    /// Sparks start just outside the face (radius 35) and its hands.
-    static let startRadius: CGFloat = 42
-    static let trickleSlots = 120
-    static let colors: [Color] = [
-        .white, .white, .white,
-        Color(red: 1.0, green: 0.88, blue: 0.58),   // warm gold
-        Color(red: 1.0, green: 0.94, blue: 0.80),   // cream
+    /// Rings start just outside the face (radius 35) and its hands.
+    static let startRadius: CGFloat = 46
+    static let ringSpeed: CGFloat = 190            // pt/s
+    static let confettiColors: [Color] = [
+        Color(red: 0.95, green: 0.33, blue: 0.36), Color(red: 0.32, green: 0.80, blue: 0.72),
+        Color(red: 1.00, green: 0.78, blue: 0.30), Color(red: 0.38, green: 0.58, blue: 0.98),
+        Color(red: 0.96, green: 0.48, blue: 0.70),
     ]
 
     var body: some View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let count = GreetingTimeline.sparksPerRing
+            let lifetime = GreetingTimeline.sparkLifetime.upperBound
 
-            // Bursts: a full ring each, angles spread evenly with a little jitter.
-            for (b, burst) in GreetingTimeline.bursts.enumerated() where t >= burst {
-                let count = GreetingTimeline.sparksPerBurst
+            for (ring, birth) in GreetingTimeline.bursts.enumerated() where t >= birth && t - birth < lifetime {
+                let age = t - birth
+                let progress = age / lifetime
+                let radius = Self.startRadius + Self.ringSpeed * CGFloat(age)
+                let thickness = 18 + 40 * CGFloat(progress)       // the band spreads as it travels
+                let ringFade = min(1, age / 0.12) * (1 - progress * progress)
                 for i in 0..<count {
-                    let h = { (k: UInt64) in hash01(UInt64(b), UInt64(i), k) }
-                    let lifetime = lerp(GreetingTimeline.sparkLifetime, h(1))
-                    let age = t - burst
-                    guard age < lifetime else { continue }
-                    let angle = (Double(i) + h(2) * 0.8) / Double(count) * 2 * .pi
-                    let speed = 140 + h(3) * 260          // initial speed, pt/s
-                    draw(&context, center: center, angle: angle, speed: speed, age: age, lifetime: lifetime,
-                         size: 1.0 + h(4) * 1.8, color: Self.colors[Int(h(5) * Double(Self.colors.count))], twinkle: h(6))
+                    let h = { (k: UInt64) in hash01(UInt64(ring), UInt64(i), k) }
+                    let angle = (Double(i) + h(1)) / Double(count) * 2 * .pi
+                    // Two random numbers averaged: denser in the middle of the band.
+                    let offset = CGFloat((h(2) + h(3)) / 2 - 0.5) * thickness
+                    let r = radius + offset
+                    let x = center.x + cos(angle) * r
+                    let y = center.y + sin(angle) * r
+                    let dot = CGFloat(0.4 + h(4) * 0.8)
+                    let opacity = ringFade * (0.3 + 0.7 * h(5))
+                    context.fill(Path(CGRect(x: x - dot, y: y - dot, width: 2 * dot, height: 2 * dot)),
+                                 with: .color(.white.opacity(opacity)))
                 }
             }
 
-            // Trickle: each slot re-fires on its own cycle until emitEnd.
-            for i in 0..<Self.trickleSlots {
-                let slot = { (k: UInt64) in hash01(99, UInt64(i), k) }
-                let lifetime = lerp(GreetingTimeline.sparkLifetime, slot(1))
-                let phase = slot(2) * lifetime
-                let cycle = floor((t + phase) / lifetime)
-                let birth = cycle * lifetime - phase
-                guard birth >= 0, birth <= GreetingTimeline.emitEnd else { continue }
-                let h = { (k: UInt64) in hash01(UInt64(i), UInt64(cycle + 1000), k) }
-                draw(&context, center: center, angle: h(3) * 2 * .pi, speed: 60 + h(4) * 140, age: t - birth,
-                     lifetime: lifetime, size: 0.7 + h(5) * 1.2, color: Self.colors[Int(h(6) * Double(Self.colors.count))], twinkle: h(7))
+            // Confetti: a few colored pieces tumbling outward with the first rings.
+            for i in 0..<GreetingTimeline.confettiCount {
+                let h = { (k: UInt64) in hash01(77, UInt64(i), k) }
+                let birth = h(1) * 0.9
+                let life = 1.8 + h(2) * 0.6
+                guard t >= birth, t - birth < life else { continue }
+                let age = t - birth
+                let angle = h(3) * 2 * .pi
+                let distance = Self.startRadius + CGFloat(120 + h(4) * 160) * CGFloat(1 - exp(-1.2 * age)) / 1.2
+                let fall = CGFloat(age * age * 10)       // a touch of gravity
+                var piece = context
+                piece.translateBy(x: center.x + cos(angle) * distance, y: center.y + sin(angle) * distance + fall)
+                piece.rotate(by: .radians(age * (4 + h(5) * 8) * (h(6) < 0.5 ? -1 : 1)))
+                let fade = min(1, age / 0.15) * (1 - pow(age / life, 3))
+                let color = Self.confettiColors[Int(h(7) * Double(Self.confettiColors.count))]
+                piece.fill(Path(roundedRect: CGRect(x: -4, y: -1.6, width: 8, height: 3.2), cornerRadius: 1.4),
+                           with: .color(color.opacity(fade)))
             }
         }
-    }
-
-    /// One spark: flies out fast and slows down (ease-out), twinkles, shrinks and fades.
-    private func draw(_ context: inout GraphicsContext, center: CGPoint, angle: Double, speed: Double, age: Double,
-                      lifetime: Double, size: Double, color: Color, twinkle: Double) {
-        let progress = age / lifetime
-        let drag = 1.6
-        let distance = Self.startRadius + CGFloat(speed * (1 - exp(-drag * age)) / drag)
-        let x = center.x + cos(angle) * distance
-        let y = center.y + sin(angle) * distance
-        let flicker = 0.75 + 0.25 * sin(age * 18 + twinkle * 6.3)
-        let opacity = min(1, age / 0.08) * (1 - progress * progress) * flicker
-        let r = size * (1 - 0.5 * progress)
-        context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)), with: .color(color.opacity(opacity)))
     }
 }
 
