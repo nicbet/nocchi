@@ -104,28 +104,12 @@ public final class NotchModel {
     var topRadius: CGFloat { mode == .expanded ? 14 : 6 }
     var bottomRadius: CGFloat { mode == .expanded ? 32 : 12 }
 
-    /// The other agents' layout on the right of the collapsed notch; nil when there's nobody else.
-    var cluster: ClusterLayout? {
-        let (shown, hidden) = store.others(fitting: ClusterLayout.maxSpots)
-        return ClusterLayout.make(count: shown.count + (hidden.isEmpty ? 0 : 1), height: geometry.notchSize.height)
-    }
-
-    /// Width of the collapsed notch's right ear: the cluster's, or none.
-    var trailingEarWidth: CGFloat { cluster?.width ?? 0 }
-
-    /// The collapsed notch isn't centered on the notch when its ears differ: how far its center
-    /// moves right (negative: left).
-    var collapsedOffsetX: CGFloat { (trailingEarWidth - earWidth) / 2 }
-
-    /// Horizontal offset of the shape in `mode`.
-    func offsetX(for mode: NotchMode) -> CGFloat { mode == .collapsed ? collapsedOffsetX : 0 }
-
     /// Size of the body (excluding the shoulders) for a mode.
     func bodySize(for mode: NotchMode) -> CGSize {
         let notch = geometry.notchSize
         switch mode {
         case .collapsed:
-            return CGSize(width: notch.width + earWidth + trailingEarWidth, height: notch.height)
+            return CGSize(width: notch.width + 2 * earWidth, height: notch.height)
         case .expanded:
             return CGSize(width: max(notch.width + 2 * earWidth, 640), height: notch.height + 168)
         }
@@ -140,7 +124,7 @@ public final class NotchModel {
 
     /// Screen rect that receives the mouse in the current mode.
     public var hitRect: CGRect {
-        geometry.rectHanging(shapeSize(for: mode)).offsetBy(dx: offsetX(for: mode), dy: 0)
+        geometry.rectHanging(shapeSize(for: mode))
     }
 
     /// Size the panel must have so every mode (plus its shadow) fits.
