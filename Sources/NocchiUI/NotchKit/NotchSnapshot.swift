@@ -54,6 +54,15 @@ public enum NotchSnapshot {
         // Everyone else calm: the cluster folds into a pill.
         urls.append(try render(previewStore(.calm), mode: .collapsed, geometry: geometry, scale: scale,
                                to: directory.appendingPathComponent("notch-calm-collapsed.png")))
+        // The right side adapts to how many others there are (1 agent = no right side).
+        for count in [1, 2, 3, 4, 6, 8] {
+            let scenario = MockScenario(name: "\(count)", agents: (0..<count).map { i in
+                MockAgent("a\(i)", name: "agent \(i)", status: [.working, .idle, .thinking, .done, .idle, .blocked, .idle, .working][i % 8],
+                          focused: i == 0)
+            })
+            urls.append(try render(previewStore(scenario), mode: .collapsed, geometry: geometry, scale: scale,
+                                   to: directory.appendingPathComponent("notch-agents-\(count).png")))
+        }
         // More agents than spots: the overflow badge and chip.
         for mode in [NotchMode.collapsed, .expanded] {
             urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,

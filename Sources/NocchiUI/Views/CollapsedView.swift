@@ -1,14 +1,15 @@
 import NocchiCore
 import SwiftUI
 
-/// Collapsed: the primary agent's face on the left, a 2×2 cluster of the others on the right.
+/// Collapsed: the primary agent's face on the left, the others on the right in one or two columns
+/// (`ClusterLayout`), or no right side at all when there's nobody else.
 struct CollapsedView: View {
     let model: NotchModel
 
     var body: some View {
         let h = model.geometry.notchSize.height
         let store = model.store
-        let (others, hidden) = store.others(fitting: 4)
+        let (others, hidden) = store.others(fitting: ClusterLayout.maxSpots)
         HStack(spacing: 0) {
             FaceView(mood: store.primary.map(store.mood(of:)) ?? store.emptyMood,
                      size: (h * 0.66).rounded(), seed: store.primary?.faceSeed ?? 0.37)
@@ -19,41 +20,44 @@ struct CollapsedView: View {
             } else {
                 Spacer(minLength: model.geometry.notchSize.width)
             }
-            Cluster(model: model, others: others, hidden: hidden)
-                .frame(width: model.earWidth, height: h)
+            if let layout = model.cluster {
+                Cluster(model: model, layout: layout, others: others, hidden: hidden)
+                    .frame(width: layout.width, height: h)
+                    .transition(.opacity)
+            }
         }
         .frame(width: model.bodySize(for: .collapsed).width, height: h)
     }
 
 }
 
-/// The others in a 2×2 grid; with more than four, the last spot is a "+N" badge.
+/// The others, laid out by `ClusterLayout`; with more than fit, the last spot is a "+N" badge.
+/// Faces glide to their new spots when the layout changes.
 struct Cluster: View {
     let model: NotchModel
+    let layout: ClusterLayout
     let others: [AgentEntry]
     let hidden: [AgentEntry]
 
     var body: some View {
-        let h = model.geometry.notchSize.height
-        let size = (h * 0.36).rounded()
-        Grid(horizontalSpacing: h * 0.06, verticalSpacing: h * 0.06) {
-            GridRow { face(0, size); face(1, size) }
-            GridRow { face(2, size); face(3, size) }
-        }
-        .animation(.spring(duration: 0.4, bounce: 0.2), value: others.map(\.ref))
-        .animation(.spring(duration: 0.4, bounce: 0.2), value: hidden.count)
-    }
-
-    @ViewBuilder
-    private func face(_ index: Int, _ size: CGFloat) -> some View {
         let store = model.store
-        if index == 3, !hidden.isEmpty {
-            OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: size)
-        } else if index < others.count {
-            FaceView(mood: store.mood(of: others[index]), size: size, seed: others[index].faceSeed)
-        } else {
-            Color.clear.frame(width: size, height: size)
+        let spring = Animation.spring(duration: 0.45, bounce: 0.2)
+        ZStack {
+            ForEach(Array(others.enumerated()), id: \.element.ref) { index, entry in
+                FaceView(mood: store.mood(of: entry), size: layout.faceSize, seed: entry.faceSeed)
+                    .frame(width: layout.faceSize, height: layout.faceSize)
+                    .offset(layout.offset(index))
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+            }
+            if !hidden.isEmpty {
+                OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: layout.faceSize)
+                    .offset(layout.offset(others.count))
+                    .transition(.opacity)
+            }
         }
+        .animation(spring, value: layout)
+        .animation(spring, value: others.map(\.ref))
+        .animation(spring, value: hidden.count)
     }
 }
 

@@ -28,10 +28,13 @@ struct NotchView: View {
                     }
                 }
         }
+        .offset(x: model.offsetX(for: model.mode))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .facesPaused(model.facesPaused)
         .facesRenderStill(renderStill || model.isMorphing)
         .animation(model.mode == .expanded && !reduceMotion ? Self.expandSpring : Self.collapseSpring, value: model.mode)
+        // Agents coming and going resize the collapsed notch's right ear.
+        .animation(Self.collapseSpring, value: model.trailingEarWidth)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: model.drop)
     }
 
