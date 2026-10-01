@@ -12,7 +12,6 @@ enum FaceRenderer {
         canvas: CGSize,
         size s: CGFloat,
         params p: FaceParams,
-        color base: RGBA,
         gaze: CGVector,
         t: Double
     ) {
@@ -33,8 +32,8 @@ enum FaceRenderer {
             cg.strokeEllipse(in: CGRect(x: -rr, y: -rr, width: 2 * rr, height: 2 * rr))
         }
 
-        // Body: soft radial shading, tinted for error and sleep.
-        let body = base.mixed(with: FacePalette.error, p.redness).darker(p.dim)
+        // Body: soft radial shading in the mood's color.
+        let body = p.body
         let bodyRect = CGRect(x: -r, y: -r, width: s, height: s)
         cg.saveGState()
         cg.addEllipse(in: bodyRect)
@@ -53,12 +52,12 @@ enum FaceRenderer {
         drawEyes(cg, s: s, p: p, gaze: gaze)
 
         if p.errorDot > 0.01 {
-            // Outlined so it stays visible on the red-tinted body.
+            // Light with a dark outline so it stays visible on the red body.
             let d = 0.2 * s
             let dot = CGRect(x: -0.62 * r - d / 2, y: -0.62 * r - d / 2, width: d, height: d)
             cg.setFillColor(RGBA.black.opacity(p.errorDot * 0.85).cgColor)
             cg.fillEllipse(in: dot.insetBy(dx: -0.03 * s, dy: -0.03 * s))
-            cg.setFillColor(FacePalette.error.lighter(0.15).opacity(p.errorDot).cgColor)
+            cg.setFillColor(FacePalette.errorDot.opacity(p.errorDot).cgColor)
             cg.fillEllipse(in: dot)
         }
         if p.badge > 0.01 { drawBadge(cg, r: r, opacity: p.badge, t: t) }
@@ -97,7 +96,7 @@ enum FaceRenderer {
         }
     }
 
-    /// Blue "typing" badge at the top-left with three bouncing dots.
+    /// Dark "typing" badge at the top-left with three bouncing dots.
     private static func drawBadge(_ cg: CGContext, r: CGFloat, opacity: Double, t: Double) {
         let c = CGPoint(x: -0.7 * r, y: -0.7 * r)
         let br = 0.3 * r

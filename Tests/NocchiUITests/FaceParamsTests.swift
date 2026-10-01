@@ -65,3 +65,24 @@ import Testing
         #expect(FaceParams.make(.waiting, t: 3, seed: 0, reduceMotion: true).rotation > 0, "keeps the head-tilt pose")
     }
 }
+
+@Suite struct FacePaletteTests {
+    @Test func everyMoodHasItsOwnColor() {
+        let colors = Mood.allCases.map(FacePalette.body(for:))
+        for (i, a) in colors.enumerated() {
+            for b in colors[(i + 1)...] {
+                let distance = abs(a.r - b.r) + abs(a.g - b.g) + abs(a.b - b.b)
+                #expect(distance > 0.25, "\(a) and \(b) are too close to tell apart")
+            }
+        }
+    }
+
+    @Test func moodChangeBlendsTheColor() {
+        var motion = FaceMotion(mood: .working)
+        motion.setMood(.done, at: 10)
+        let middle = motion.params(at: 10 + FaceMotion.transitionDuration / 2, motionTime: 0, seed: 0).body
+        let blue = FacePalette.body(for: .working), green = FacePalette.body(for: .done)
+        #expect(middle != blue && middle != green)
+        #expect(motion.params(at: 11, motionTime: 0, seed: 0).body == green)
+    }
+}

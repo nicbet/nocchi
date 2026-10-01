@@ -5,7 +5,6 @@ import SwiftUI
 /// are a still SwiftUI `Canvas` frame.
 public struct FaceView: View {
     let mood: Mood
-    let color: RGBA
     let size: CGFloat
     let seed: Double
 
@@ -20,9 +19,8 @@ public struct FaceView: View {
     /// and only redraws when its mood changes.
     static let minimumAnimatedSize: CGFloat = 14
 
-    public init(mood: Mood, color: RGBA = FacePalette.primary, size: CGFloat, seed: Double = 0) {
+    public init(mood: Mood, size: CGFloat, seed: Double = 0) {
         self.mood = mood
-        self.color = color
         self.size = size
         self.seed = seed
     }
@@ -32,7 +30,7 @@ public struct FaceView: View {
             if renderStill || size < Self.minimumAnimatedSize {
                 still
             } else {
-                LiveFace(mood: mood, color: color, size: size, seed: seed,
+                LiveFace(mood: mood, size: size, seed: seed,
                          frameRate: frameRate, paused: paused, reduceMotion: reduceMotion)
             }
         }
@@ -48,7 +46,7 @@ public struct FaceView: View {
         let params = FaceParams.make(mood, t: 0, seed: 0)
         return Canvas { context, canvas in
             context.withCGContext { cg in
-                FaceRenderer.draw(in: cg, canvas: canvas, size: size, params: params, color: color, gaze: params.gazeBias, t: 0)
+                FaceRenderer.draw(in: cg, canvas: canvas, size: size, params: params, gaze: params.gazeBias, t: 0)
             }
         }
     }
@@ -56,7 +54,6 @@ public struct FaceView: View {
 
 private struct LiveFace: NSViewRepresentable {
     let mood: Mood
-    let color: RGBA
     let size: CGFloat
     let seed: Double
     let frameRate: Double
@@ -64,11 +61,11 @@ private struct LiveFace: NSViewRepresentable {
     let reduceMotion: Bool
 
     func makeNSView(context: Context) -> FaceNSView {
-        FaceNSView(mood: mood, color: color, size: size, seed: seed)
+        FaceNSView(mood: mood, size: size, seed: seed)
     }
 
     func updateNSView(_ view: FaceNSView, context: Context) {
-        view.configure(mood: mood, color: color, size: size, seed: seed,
+        view.configure(mood: mood, size: size, seed: seed,
                        frameRate: frameRate, paused: paused, reduceMotion: reduceMotion)
     }
 }

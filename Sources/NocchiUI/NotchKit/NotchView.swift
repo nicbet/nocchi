@@ -71,7 +71,7 @@ private struct CollapsedPlaceholder: View {
     }
 
     private func face(_ slot: Int) -> some View {
-        FaceView(mood: model.clusterMoods[slot], color: FacePalette.bot(slot),
+        FaceView(mood: model.clusterMoods[slot],
                  size: (model.geometry.notchSize.height * 0.36).rounded(), seed: Double(slot + 1) * 0.29)
     }
 }
@@ -95,7 +95,7 @@ private struct ExpandedPlaceholder: View {
                         }
                         Spacer()
                         ForEach(0..<4, id: \.self) { slot in
-                            FaceView(mood: model.clusterMoods[slot], color: FacePalette.bot(slot), size: 30, seed: Double(slot + 1) * 0.29)
+                            FaceView(mood: model.clusterMoods[slot], size: 30, seed: Double(slot + 1) * 0.29)
                                 .frame(width: 48, height: 48)
                         }
                     }

@@ -4,6 +4,21 @@ import SwiftUI
 
 /// Debug view: every mood at several sizes and colors, plus one big face to watch transitions.
 public struct MoodGallery: View {
+    /// Sizes the faces appear at: gallery, expanded card, expanded cluster, collapsed primary, collapsed cluster.
+    static let sizes: [(label: String, points: CGFloat)] = [("large", 64), ("card", 40), ("chip", 30), ("notch", 18), ("cluster", 10)]
+
+    static func colorName(_ mood: Mood) -> String {
+        switch mood {
+        case .idle: "white"
+        case .thinking: "purple"
+        case .working: "blue"
+        case .waiting: "amber"
+        case .done: "green"
+        case .error: "red"
+        case .sleep: "gray"
+        }
+    }
+
     @State private var mood: Mood = .idle
     @State private var cycling = false
 
@@ -27,27 +42,24 @@ public struct MoodGallery: View {
                 }
             }
 
-            Grid(alignment: .center, horizontalSpacing: 22, verticalSpacing: 18) {
+            Grid(alignment: .center, horizontalSpacing: 26, verticalSpacing: 18) {
                 GridRow {
                     Text("")
-                    Text("primary").gridColumnAlignment(.center)
-                    ForEach(0..<4, id: \.self) { Text("slot \($0)") }
-                    Text("notch size")
+                    ForEach(Self.sizes, id: \.label) { Text($0.label) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
                 ForEach(Array(Mood.allCases.enumerated()), id: \.element) { row, mood in
                     GridRow {
-                        Text(mood.rawValue).font(.callout.monospaced()).gridColumnAlignment(.trailing)
-                        FaceView(mood: mood, size: 64, seed: Double(row) * 0.31).frame(width: 96, height: 84)
-                        ForEach(0..<4, id: \.self) { slot in
-                            FaceView(mood: mood, color: FacePalette.bot(slot), size: 40, seed: Double(row * 4 + slot) * 0.17)
-                                .frame(width: 64, height: 64)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(mood.rawValue).font(.callout.monospaced())
+                            Text(Self.colorName(mood)).font(.caption2).foregroundStyle(.secondary)
                         }
-                        HStack(spacing: 6) {
-                            FaceView(mood: mood, size: 20, seed: Double(row) * 0.53)
-                            FaceView(mood: mood, color: FacePalette.bot(row), size: 10, seed: Double(row) * 0.71)
+                        .gridColumnAlignment(.trailing)
+                        ForEach(Array(Self.sizes.enumerated()), id: \.element.label) { column, size in
+                            FaceView(mood: mood, size: size.points, seed: Double(row * 5 + column) * 0.17)
+                                .frame(width: max(size.points * 1.5, 24), height: max(size.points * 1.4, 24))
                         }
                     }
                 }

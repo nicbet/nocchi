@@ -8,8 +8,7 @@ struct FaceParams: Equatable {
     var offset = CGVector.zero      // nod, bounce, shake
     var rotation = 0.0              // radians, head tilt
     var scale = 1.0                 // breathing
-    var redness = 0.0               // body tint toward error red
-    var dim = 0.0                   // body tint toward dark (asleep)
+    var body = FacePalette.body(for: .idle)  // color means state
 
     var eyeWidth = 0.095
     var eyeHeight = 0.26
@@ -32,7 +31,7 @@ struct FaceParams: Equatable {
         func v(_ x: CGVector, _ y: CGVector) -> CGVector { CGVector(dx: m(x.dx, y.dx), dy: m(x.dy, y.dy)) }
         return FaceParams(
             offset: v(a.offset, b.offset), rotation: m(a.rotation, b.rotation), scale: m(a.scale, b.scale),
-            redness: m(a.redness, b.redness), dim: m(a.dim, b.dim),
+            body: a.body.mixed(with: b.body, p),
             eyeWidth: m(a.eyeWidth, b.eyeWidth), eyeHeight: m(a.eyeHeight, b.eyeHeight),
             eyeY: m(a.eyeY, b.eyeY), eyeSpacing: m(a.eyeSpacing, b.eyeSpacing), caret: m(a.caret, b.caret),
             gazeBias: v(a.gazeBias, b.gazeBias), gazeWeight: m(a.gazeWeight, b.gazeWeight),
@@ -59,6 +58,7 @@ struct FaceParams: Equatable {
         let tt = t + seed * 13.7
         let tau = 2 * Double.pi
         var p = FaceParams()
+        p.body = FacePalette.body(for: mood)
         let breathe = 1 + 0.015 * sin(tt * tau / 3.5)
 
         switch mood {
@@ -99,7 +99,6 @@ struct FaceParams: Equatable {
             let phase = tt.truncatingRemainder(dividingBy: 2.4)
             let burst = max(0, 1 - phase / 0.6)
             p.offset.dx = 0.05 * sin(tt * tau * 7) * burst
-            p.redness = 0.8
             p.eyeWidth = 0.17
             p.eyeHeight = 0.055
             p.gazeWeight = 0
@@ -107,7 +106,6 @@ struct FaceParams: Equatable {
 
         case .sleep:
             p.scale = 1 + 0.025 * sin(tt * tau / 5)
-            p.dim = 0.25
             p.eyeWidth = 0.13
             p.eyeHeight = 0.03
             p.eyeY = 0.06

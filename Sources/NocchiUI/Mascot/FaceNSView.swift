@@ -6,7 +6,6 @@ import NocchiCore
 /// redraws one small layer, and only when the picture actually changed.
 final class FaceNSView: NSView {
     private var motion: FaceMotion
-    private var color: RGBA
     private var size: CGFloat
     private var seed: Double
     private var frameRate: Double = 30
@@ -23,9 +22,8 @@ final class FaceNSView: NSView {
         var t: Double
     }
 
-    init(mood: Mood, color: RGBA, size: CGFloat, seed: Double) {
+    init(mood: Mood, size: CGFloat, seed: Double) {
         motion = FaceMotion(mood: mood)
-        self.color = color
         self.size = size
         self.seed = seed
         super.init(frame: .zero)
@@ -40,10 +38,9 @@ final class FaceNSView: NSView {
     override var isOpaque: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func configure(mood: Mood, color: RGBA, size: CGFloat, seed: Double, frameRate: Double, paused: Bool, reduceMotion: Bool) {
-        let appearanceChanged = color != self.color || size != self.size || seed != self.seed || reduceMotion != self.reduceMotion
+    func configure(mood: Mood, size: CGFloat, seed: Double, frameRate: Double, paused: Bool, reduceMotion: Bool) {
+        let appearanceChanged = size != self.size || seed != self.seed || reduceMotion != self.reduceMotion
         motion.setMood(mood, at: CACurrentMediaTime())
-        self.color = color
         self.size = size
         self.seed = seed
         self.reduceMotion = reduceMotion
@@ -118,7 +115,7 @@ final class FaceNSView: NSView {
         return [
             pt(p.offset.dx * s), pt(p.offset.dy * s), step(p.rotation, 0.005),
             size < FaceRenderer.minimumBreathingSize ? 1 : step(p.scale, 0.002),
-            step(p.redness, 0.01), step(p.dim, 0.01),
+            step(p.body.r, 0.004), step(p.body.g, 0.004), step(p.body.b, 0.004),
             pt(p.eyeWidth * s), pt(p.eyeHeight * s), pt(p.eyeY * s), pt(p.eyeSpacing * s), step(p.caret, 0.01),
             pt(gaze.dx * travel), pt(gaze.dy * travel), step(p.errorDot, 0.01),
             step(p.ring, 0.01), step(p.badge, 0.01), step(p.sparkles, 0.01), step(p.zzz, 0.01),
@@ -129,6 +126,6 @@ final class FaceNSView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         FaceRenderer.draw(in: cg, canvas: bounds.size, size: size, params: frame_.params,
-                          color: color, gaze: frame_.gaze, t: frame_.t)
+                          gaze: frame_.gaze, t: frame_.t)
     }
 }
