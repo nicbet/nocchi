@@ -22,8 +22,14 @@ struct NotchView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(duration: 0.45, bounce: 0.28), value: model.mode)
+        .animation(model.mode == .expanded ? Self.expandSpring : Self.collapseSpring, value: model.mode)
     }
+
+    /// Opening can overshoot: the bounce reads as playful.
+    static let expandSpring = Animation.spring(duration: 0.45, bounce: 0.28)
+    /// Closing must not overshoot, or the shape briefly shrinks past its collapsed size
+    /// and is smaller than the content inside it.
+    static let collapseSpring = Animation.spring(duration: 0.35, bounce: 0)
 
     @ViewBuilder
     private var content: some View {
