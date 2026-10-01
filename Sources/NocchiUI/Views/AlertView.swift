@@ -96,7 +96,7 @@ private struct AlertGlow: View {
     }
 }
 
-/// The other agents as a small overlapping stack of faces.
+/// The other agents as a small stack of faces.
 private struct OthersColumn: View {
     let store: AgentStore
     let excluding: AgentRef
@@ -104,13 +104,13 @@ private struct OthersColumn: View {
     var body: some View {
         let others = store.others.filter { $0.ref != excluding }.prefix(4)
         if !others.isEmpty {
-            VStack(spacing: -6) {
+            VStack(spacing: 4) {
                 ForEach(Array(others), id: \.ref) { other in
-                    FaceView(mood: store.mood(of: other), size: 20, seed: other.faceSeed)
-                        .frame(width: 24, height: 24)
+                    FaceView(mood: store.mood(of: other), size: 18, seed: other.faceSeed)
+                        .frame(width: 22, height: 22)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .padding(.horizontal, 6)
             .background(Capsule().fill(.black.opacity(0.35)))
         }
