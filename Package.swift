@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .executable(name: "nocchi", targets: ["Nocchi"]),
+        .executable(name: "nocchi-hook", targets: ["NocchiHook"]),
     ],
     targets: [
         // App shell: lifecycle, notch panel, menu-bar item.
@@ -15,6 +16,12 @@ let package = Package(
         ),
         // Agent model, AgentAdapter protocol, store and reducer. No UI, no Herdr.
         .target(name: "NocchiCore"),
+        // What a hook sends to the app: socket path and message format. Shared by both ends.
+        .target(name: "NocchiHookProtocol"),
+        // Run by Claude Code / Codex hooks: forwards the hook's input to the app and exits.
+        .executableTarget(name: "NocchiHook", dependencies: ["NocchiHookProtocol"], path: "Sources/nocchi-hook"),
+        // The app's end: a Unix socket server streaming hook messages to the native adapters.
+        .target(name: "NocchiHooks", dependencies: ["NocchiHookProtocol"]),
         // Terminal apps hosting agents: process tree, bring to front, frontmost watching.
         .target(name: "NocchiTerminals"),
         // HerdrAdapter: Herdr socket client and event stream.
@@ -29,5 +36,6 @@ let package = Package(
         .testTarget(name: "NocchiUITests", dependencies: ["NocchiUI"]),
         .testTarget(name: "NocchiClaudeTests", dependencies: ["NocchiClaude"]),
         .testTarget(name: "NocchiTerminalsTests", dependencies: ["NocchiTerminals"]),
+        .testTarget(name: "NocchiHooksTests", dependencies: ["NocchiHooks", "NocchiHookProtocol", "NocchiHook"]),
     ]
 )
