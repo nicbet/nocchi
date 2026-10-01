@@ -27,8 +27,6 @@ struct NotchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .facesPaused(model.facesPaused)
-        .faceFrameRate(model.mode == .expanded ? 30 : 12)
-        .faceAnimatesCalmMoods(model.mode == .expanded)
         .animation(model.mode == .expanded ? Self.expandSpring : Self.collapseSpring, value: model.mode)
     }
 

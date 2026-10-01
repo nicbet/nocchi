@@ -80,8 +80,7 @@ public final class MoodGalleryWindow {
             )
             window.title = "nocchi — Mood Gallery"
             window.isReleasedWhenClosed = false
-            let locator = PointerLocator(window: window)
-            window.contentView = NSHostingView(rootView: MoodGallery().pointerLocator(locator))
+            window.contentView = NSHostingView(rootView: MoodGallery())
             window.center()
             self.window = window
         }

@@ -20,6 +20,7 @@ public struct RGBA: Equatable, Sendable {
     public func opacity(_ o: Double) -> RGBA { RGBA(r, g, b, a * o) }
 
     public var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: a) }
+    public var cgColor: CGColor { CGColor(srgbRed: r, green: g, blue: b, alpha: a) }
 }
 
 /// Face colors. The primary face is near-white; other agents get a stable slot color.

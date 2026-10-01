@@ -15,6 +15,7 @@ public enum NotchSnapshot {
             let view = NotchView(model: model)
                 .frame(width: size.width, height: size.height)
                 .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                .facesRenderStill()
 
             let renderer = ImageRenderer(content: view)
             renderer.scale = scale
@@ -31,7 +32,7 @@ public enum NotchSnapshot {
     }
 
     static func writeGallery(to directory: URL, scale: CGFloat) throws -> URL {
-        let renderer = ImageRenderer(content: MoodGallery().frame(width: 760))
+        let renderer = ImageRenderer(content: MoodGallery().frame(width: 760).facesRenderStill())
         renderer.scale = scale
         guard let image = renderer.cgImage,
               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
