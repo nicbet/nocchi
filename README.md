@@ -107,3 +107,7 @@ make live       # render the notch from your real Herdr
 the mood gallery, a greeting replay and controls to keep the notch open.
 
 The design, architecture and milestones are in [PLAN.md](PLAN.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
