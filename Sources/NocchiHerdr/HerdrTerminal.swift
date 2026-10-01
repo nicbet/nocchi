@@ -1,9 +1,14 @@
 import AppKit
 
-/// Finds the terminal app hosting a Herdr client, so focusing an agent can also bring its
-/// terminal to the front. `agent.focus` only switches panes inside Herdr.
+/// Finds the terminal apps hosting Herdr clients (any terminal: whichever regular app sits above a
+/// client process), so focusing an agent can also bring its terminal to the front. `agent.focus`
+/// only switches panes inside Herdr. Several clients can be attached at once, in different apps.
 public enum HerdrTerminal {
-    /// Brings the terminal running a Herdr client to the front. Returns false if none was found.
+    /// The host the user was last in, preferred when several are attached.
+    @MainActor static var lastActiveHost: pid_t?
+
+    /// Brings the terminal running a Herdr client to the front: the one used last, when several
+    /// are attached. Returns false if none was found.
     ///
     /// Since macOS 14 a background app can't activate another one: `activate()` and
     /// `NSWorkspace.openApplication` both quietly leave the frontmost app in place. Handing the
@@ -11,7 +16,8 @@ public enum HerdrTerminal {
     @discardableResult
     @MainActor
     public static func bringToFront() async -> Bool {
-        guard let app = await hostApp() else { return false }
+        let hosts = await hostApps()
+        guard let app = hosts.first(where: { $0.processIdentifier == lastActiveHost }) ?? hosts.first else { return false }
         let arguments: [String]
         if let bundleID = app.bundleIdentifier {
             arguments = ["-b", bundleID]
@@ -29,22 +35,27 @@ public enum HerdrTerminal {
         }
     }
 
-    /// The first regular app up the parent chain of a Herdr client process.
+    /// For each Herdr client process, the first regular app up its parent chain; newest client
+    /// first, each app once. Empty when Herdr runs inside tmux or over SSH.
     @MainActor
-    static func hostApp() async -> NSRunningApplication? {
+    static func hostApps() async -> [NSRunningApplication] {
         let table = await processTable()
         let clients = table.values.filter { $0.isHerdr && !$0.isServer }.sorted { $0.pid > $1.pid }
+        var hosts: [NSRunningApplication] = []
         for client in clients {
             var pid = client.ppid
             var hops = 0
             while pid > 1, hops < 32 {
-                if let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular { return app }
+                if let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular {
+                    if !hosts.contains(where: { $0.processIdentifier == pid }) { hosts.append(app) }
+                    break
+                }
                 guard let parent = table[pid] else { break }
                 pid = parent.ppid
                 hops += 1
             }
         }
-        return nil
+        return hosts
     }
 
     struct Process: Hashable {
@@ -85,9 +96,10 @@ public enum HerdrTerminal {
     }
 }
 
-/// Whether the terminal app hosting Herdr is the frontmost app: now, then on every change.
+/// Whether a terminal app hosting Herdr is the frontmost app: now, then on every change.
 /// Herdr treats a focused pane as seen; this tells whether anyone could actually see it.
-/// When the host can't be found (Herdr over SSH, say), it reports `true`: plain Herdr behavior.
+/// When no host can be found (Herdr in tmux or over SSH, say), it reports `true`: plain Herdr
+/// behavior.
 @MainActor
 enum TerminalPresence {
     static func updates() -> AsyncStream<Bool> {
@@ -101,7 +113,7 @@ enum TerminalPresence {
     @MainActor
     private final class Watcher {
         let continuation: AsyncStream<Bool>.Continuation
-        var host: pid_t?
+        var hosts: Set<pid_t> = []
         var observer: NSObjectProtocol?
         var last: Bool?
 
@@ -110,7 +122,7 @@ enum TerminalPresence {
         }
 
         func start() async {
-            host = await HerdrTerminal.hostApp()?.processIdentifier
+            await refreshHosts()
             report()
             observer = NSWorkspace.shared.notificationCenter.addObserver(
                 forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -125,19 +137,27 @@ enum TerminalPresence {
         }
 
         private func activated() {
-            // The terminal may have been restarted since: look again.
-            if let host, NSRunningApplication(processIdentifier: host) != nil {
+            // Clients come and go (a new terminal window attaches, one quits): look again when
+            // the frontmost app isn't a known host.
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            if let front, hosts.contains(front) {
                 report()
             } else {
                 Task {
-                    host = await HerdrTerminal.hostApp()?.processIdentifier
+                    await refreshHosts()
                     report()
                 }
             }
         }
 
+        private func refreshHosts() async {
+            hosts = Set(await HerdrTerminal.hostApps().map(\.processIdentifier))
+        }
+
         private func report() {
-            let frontmost = host.map { NSWorkspace.shared.frontmostApplication?.processIdentifier == $0 } ?? true
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            if let front, hosts.contains(front) { HerdrTerminal.lastActiveHost = front }
+            let frontmost = hosts.isEmpty || front.map(hosts.contains) == true
             guard frontmost != last else { return }
             last = frontmost
             continuation.yield(frontmost)
