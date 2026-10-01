@@ -42,7 +42,20 @@ struct FaceParams: Equatable {
     }
 
     /// Parameters for `mood` at time `t` (seconds). `seed` desynchronizes faces from each other.
-    static func make(_ mood: Mood, t: Double, seed: Double) -> Self {
+    /// With `reduceMotion`, motion that moves the face (nod, bounce, shake, sway, breathing) is
+    /// removed; blinks, gaze, pulses and twinkles stay.
+    static func make(_ mood: Mood, t: Double, seed: Double, reduceMotion: Bool = false) -> Self {
+        var p = makeAnimated(mood, t: t, seed: seed)
+        if reduceMotion {
+            let pose = makeAnimated(mood, t: 0, seed: 0)
+            p.offset = .zero
+            p.rotation = pose.rotation
+            p.scale = 1
+        }
+        return p
+    }
+
+    private static func makeAnimated(_ mood: Mood, t: Double, seed: Double) -> Self {
         let tt = t + seed * 13.7
         let tau = 2 * Double.pi
         var p = FaceParams()

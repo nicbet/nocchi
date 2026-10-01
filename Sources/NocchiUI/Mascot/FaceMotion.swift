@@ -20,14 +20,14 @@ struct FaceMotion {
         changedAt = now
     }
 
-    /// Parameters at wall-clock `now`. `motionTime` drives blinks and nods (0 under Reduce Motion).
-    func params(at now: Double, motionTime t: Double, seed: Double) -> FaceParams {
-        let target = FaceParams.make(mood, t: t, seed: seed)
+    /// Parameters at wall-clock `now` (for the transition) and animation time `t` (blinks, nods).
+    func params(at now: Double, motionTime t: Double, seed: Double, reduceMotion: Bool = false) -> FaceParams {
+        let target = FaceParams.make(mood, t: t, seed: seed, reduceMotion: reduceMotion)
         guard let previousMood else { return target }
         let progress = min(1, max(0, (now - changedAt) / Self.transitionDuration))
         guard progress < 1 else { return target }
         let eased = progress * progress * (3 - 2 * progress)
-        return .lerp(FaceParams.make(previousMood, t: t, seed: seed), target, eased)
+        return .lerp(FaceParams.make(previousMood, t: t, seed: seed, reduceMotion: reduceMotion), target, eased)
     }
 
     func isTransitioning(at now: Double) -> Bool {

@@ -4,6 +4,7 @@ import SwiftUI
 /// The notch itself, drawn at the top center of the (larger, transparent) panel.
 struct NotchView: View {
     let model: NotchModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let size = model.shapeSize(for: model.mode)
@@ -27,7 +28,8 @@ struct NotchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .facesPaused(model.facesPaused)
-        .animation(model.mode == .expanded ? Self.expandSpring : Self.collapseSpring, value: model.mode)
+        .facesRenderStill(model.isMorphing)
+        .animation(model.mode == .expanded && !reduceMotion ? Self.expandSpring : Self.collapseSpring, value: model.mode)
     }
 
     /// Opening can overshoot: the bounce reads as playful.

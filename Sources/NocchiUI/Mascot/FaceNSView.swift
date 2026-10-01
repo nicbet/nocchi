@@ -86,8 +86,8 @@ final class FaceNSView: NSView {
     /// Computes the current frame and redraws only if it differs visibly from the last one.
     private func update(force: Bool) {
         let now = CACurrentMediaTime()
-        let t = reduceMotion ? 0 : Date.timeIntervalSinceReferenceDate
-        let params = motion.params(at: now, motionTime: t, seed: seed)
+        let t = Date.timeIntervalSinceReferenceDate
+        let params = motion.params(at: now, motionTime: t, seed: seed, reduceMotion: reduceMotion)
         let gaze = FaceMotion.gaze(params, pointer: pointerOffset(), size: size)
         frame_ = Frame(params: params, gaze: gaze, t: t)
 
@@ -106,10 +106,10 @@ final class FaceNSView: NSView {
     }
 
     /// What the face looks like, quantized to what's visible: quarter points for positions,
-    /// small steps for angles and opacities. Accessories animate on their own, so a face showing
-    /// one always redraws.
+    /// small steps for angles and opacities. Accessories animate on their own clock, so while one
+    /// is showing the key also includes `t` and the face redraws every tick.
     private func renderKey(_ p: FaceParams, gaze: CGVector, t: Double) -> [Double] {
-        if p.ring > 0.01 || p.badge > 0.01 || p.sparkles > 0.01 || p.zzz > 0.01 { return [t] }
+        let animatesOnItsOwn = p.ring > 0.01 || p.badge > 0.01 || p.sparkles > 0.01 || p.zzz > 0.01
         let s = Double(size)
         let travel = Double(FaceRenderer.eyeTravel(size: size))
         func pt(_ x: Double) -> Double { (x * 4).rounded() }
@@ -120,6 +120,8 @@ final class FaceNSView: NSView {
             step(p.redness, 0.01), step(p.dim, 0.01),
             pt(p.eyeWidth * s), pt(p.eyeHeight * s), pt(p.eyeY * s), pt(p.eyeSpacing * s), step(p.caret, 0.01),
             pt(gaze.dx * travel), pt(gaze.dy * travel), step(p.errorDot, 0.01),
+            step(p.ring, 0.01), step(p.badge, 0.01), step(p.sparkles, 0.01), step(p.zzz, 0.01),
+            animatesOnItsOwn ? t : 0,
         ]
     }
 

@@ -12,7 +12,14 @@ public enum NotchMode: Sendable, Equatable {
 @Observable
 public final class NotchModel {
     public var geometry: NotchGeometry
-    public var mode: NotchMode = .collapsed
+    public var mode: NotchMode = .collapsed {
+        didSet { if mode != oldValue { beginMorph() } }
+    }
+    /// True while the shape animates between modes. Live faces are AppKit views, which SwiftUI
+    /// can't clip to the notch shape or transition, so faces draw as still frames meanwhile.
+    public private(set) var isMorphing = false
+    @ObservationIgnored private var morphEnd: Task<Void, Never>?
+    static let morphDuration: Duration = .milliseconds(550)
     public var isHovering = false
     /// Debug: stay expanded regardless of hover.
     public var isPinned = false
@@ -30,6 +37,16 @@ public final class NotchModel {
 
     public init(geometry: NotchGeometry) {
         self.geometry = geometry
+    }
+
+    private func beginMorph() {
+        isMorphing = true
+        morphEnd?.cancel()
+        morphEnd = Task { [weak self] in
+            try? await Task.sleep(for: Self.morphDuration)
+            guard !Task.isCancelled else { return }
+            self?.isMorphing = false
+        }
     }
 
     // MARK: Metrics

@@ -47,4 +47,21 @@ import Testing
         #expect(FaceParams.make(.error, t: 0, seed: 0).errorDot == 1)
         #expect(FaceParams.make(.idle, t: 0, seed: 0).badge == 0)
     }
+
+    @Test(arguments: Mood.allCases)
+    func reduceMotionRemovesTravelButKeepsBlinksAndPulses(mood: Mood) {
+        let samples = stride(from: 0.0, to: 20, by: 0.05).map { FaceParams.make(mood, t: $0, seed: 0.4, reduceMotion: true) }
+        let still = samples.allSatisfy { $0.offset == .zero && $0.scale == 1 }
+        let fixedTilt = Set(samples.map(\.rotation)).count == 1
+        #expect(still)
+        #expect(fixedTilt)
+    }
+
+    @Test func reduceMotionStillBlinksAndPulses() {
+        let idle = stride(from: 0.0, to: 20, by: 0.01).map { FaceParams.make(.idle, t: $0, seed: 0.4, reduceMotion: true).eyeHeight }
+        let waiting = stride(from: 0.0, to: 5, by: 0.05).map { FaceParams.make(.waiting, t: $0, seed: 0.4, reduceMotion: true).ring }
+        #expect(Set(idle).count > 1, "blinks")
+        #expect(Set(waiting).count > 1, "ring pulses")
+        #expect(FaceParams.make(.waiting, t: 3, seed: 0, reduceMotion: true).rotation > 0, "keeps the head-tilt pose")
+    }
 }
