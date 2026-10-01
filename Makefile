@@ -1,7 +1,7 @@
 # nocchi — common tasks. Run `make` or `make help` for the list.
 
 CONFIG ?= debug
-APP    := build/nocchi.app
+APP    := build/Nocchi.app
 
 .DEFAULT_GOAL := help
 .PHONY: help build release test app run dev stop snapshot live clean
@@ -12,16 +12,16 @@ help: ## Show this help
 build: ## Compile (CONFIG=debug|release, default debug)
 	swift build -c $(CONFIG)
 
-release: ## Build a release nocchi.app
+release: ## Build a release Nocchi.app
 	scripts/bundle.sh release
 
 test: ## Run all tests (Herdr integration tests run when herdr is installed)
 	swift test
 
-app: ## Build nocchi.app (CONFIG=debug|release)
+app: ## Build Nocchi.app (CONFIG=debug|release)
 	scripts/bundle.sh $(CONFIG)
 
-run: app ## Build and launch nocchi.app
+run: app ## Build and launch Nocchi.app
 	-pkill -x nocchi
 	open $(APP)
 

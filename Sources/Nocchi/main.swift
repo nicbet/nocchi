@@ -4,6 +4,20 @@ import NocchiCore
 import NocchiHerdr
 import NocchiUI
 
+// Dev tool: `nocchi --render-icon <dir>` writes the app icon variants as 1024 px PNGs.
+if let flag = CommandLine.arguments.firstIndex(of: "--render-icon") {
+    let dir = URL(fileURLWithPath: CommandLine.arguments.dropFirst(flag + 1).first ?? ".")
+    MainActor.assumeIsolated {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for variant in AppIcon.Variant.allCases {
+            let url = dir.appending(path: "icon-\(variant.rawValue).png")
+            try? AppIcon.png(variant)?.write(to: url)
+            print(url.path)
+        }
+    }
+    exit(0)
+}
+
 // Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
 // renders what the real Herdr reports instead of the preview scenarios; `--live --source claude`
 // renders what Claude's own session registry reports.

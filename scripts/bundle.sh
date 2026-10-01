@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build nocchi and assemble build/nocchi.app.
+# Build nocchi and assemble build/Nocchi.app (the app is "Nocchi"; its executable stays `nocchi`).
 # Usage: scripts/bundle.sh [debug|release]   (default: release)
 set -euo pipefail
 
 config="${1:-release}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="$root/build/nocchi.app"
+app="$root/build/Nocchi.app"
 
 cd "$root"
 swift build -c "$config"
@@ -21,8 +21,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>                <string>nocchi</string>
-    <key>CFBundleDisplayName</key>         <string>nocchi</string>
+    <key>CFBundleName</key>                <string>Nocchi</string>
+    <key>CFBundleDisplayName</key>         <string>Nocchi</string>
     <key>CFBundleIdentifier</key>          <string>com.github.nicbet.nocchi</string>
     <key>CFBundleExecutable</key>          <string>nocchi</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
