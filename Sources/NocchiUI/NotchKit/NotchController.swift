@@ -18,6 +18,7 @@ public final class NotchController {
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var peekTracker = PeekTracker()
     private var peekEnd: Task<Void, Never>?
+    private var bannerEnd: Task<Void, Never>?
     private var mouseDownMonitor: Any?
     private var dragPoll: Task<Void, Never>?
     private var dragChangeCount = 0
@@ -103,13 +104,45 @@ public final class NotchController {
             Task { @MainActor in self?.observeMoods() }
         }
         let entered = peekTracker.update(moods)
-        if let first = entered.first {
-            peek(first)
-            if NocchiSettings.shared.playsSounds, !model.isGreeting { Self.sound(for: first.mood)?.play() }
+        let settings = NocchiSettings.shared
+        let policy = PeekPolicy(level: settings.peekLevel,
+                                statusTextAnnounces: !model.geometry.hasHardwareNotch && settings.showsStatusText)
+        // Only what you haven't seen: a turn finishing right where you look just celebrates.
+        let actions = policy.actions(for: entered) { ref in
+            switch store.state.agents[ref]?.info.status {
+            case .done, .blocked, .error: true
+            default: false
+            }
         }
+        for action in actions {
+            switch action {
+            case .open(let peek): self.peek(peek)
+            case .banner(let peek): showBanner(peek)
+            }
+        }
+        // Sounds follow the peek level: everything unread, or only what opens the notch.
+        let audible = settings.peekLevel == .everything
+            ? entered.first { store.state.agents[$0.ref]?.needsAttention == true }
+            : actions.lazy.compactMap { if case .open(let peek) = $0 { peek } else { nil } }.first
+        if settings.playsSounds, !model.isGreeting, let audible { Self.sound(for: audible.mood)?.play() }
         for peek in entered {
             guard let entry = store.state.agents[peek.ref] else { continue }
             model.ticker.announce(Ticker.Message(ref: peek.ref, name: entry.info.displayName, mood: peek.mood))
+        }
+    }
+
+    /// The mini peek: a line under the collapsed notch for about 3 s. Arrivals while it shows join
+    /// it ("2 agents finished") and keep it up.
+    private func showBanner(_ peek: PeekTracker.Peek) {
+        guard !model.isGreeting, model.mode == .collapsed, let entry = model.store.state.agents[peek.ref] else { return }
+        notchLog.info("banner: \(peek.ref.description, privacy: .public) \(String(describing: peek.mood), privacy: .public)")
+        model.banner = model.banner?.adding(peek.ref, mood: peek.mood)
+            ?? PeekBanner(ref: peek.ref, name: entry.info.displayName, mood: peek.mood)
+        bannerEnd?.cancel()
+        bannerEnd = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.model.banner = nil
         }
     }
 
@@ -125,8 +158,10 @@ public final class NotchController {
     /// Opens the notch for a moment when an agent needs you, failed or finished. The expanded
     /// notch shows the alert for the most urgent agent. Hovering takes over from the timeout.
     private func peek(_ peek: PeekTracker.Peek) {
-        guard NocchiSettings.shared.autoPeek, !model.isGreeting, !model.holdsOpen, !model.isHovering else { return }
+        guard !model.isGreeting, !model.holdsOpen, !model.isHovering else { return }
         notchLog.info("peek: \(peek.ref.description, privacy: .public) \(String(describing: peek.mood), privacy: .public)")
+        if model.mode == .collapsed { model.isPeeking = true }
+        model.banner = nil
         setMode(.expanded)
         peekEnd?.cancel()
         peekEnd = Task { [weak self] in

@@ -17,6 +17,7 @@ public final class NotchModel {
         didSet {
             guard mode != oldValue else { return }
             notchLog.info("mode: \(String(describing: self.mode), privacy: .public)")
+            if mode == .collapsed { isPeeking = false }
             beginMorph()
         }
     }
@@ -37,6 +38,10 @@ public final class NotchModel {
     /// The launch greeting is showing.
     public var isGreeting = false
     public var drop: DropState = .none
+    /// The mini peek: a line under the collapsed notch for finished or failed agents.
+    public var banner: PeekBanner?
+    /// Opened by a peek rather than the pointer: opens without the playful bounce.
+    public var isPeeking = false
     /// Writing a message to an agent from the notch.
     public var prompt: PromptState = .none {
         didSet {
@@ -109,7 +114,7 @@ public final class NotchModel {
         let notch = geometry.notchSize
         switch mode {
         case .collapsed:
-            return CGSize(width: notch.width + 2 * earWidth, height: notch.height)
+            return CGSize(width: notch.width + 2 * earWidth, height: notch.height + (banner == nil ? 0 : Self.bannerHeight))
         case .expanded:
             return CGSize(width: max(notch.width + 2 * earWidth, 640), height: notch.height + 168)
         }
@@ -134,6 +139,7 @@ public final class NotchModel {
     }
 
     static let shadowMargin: CGFloat = 40
+    static let bannerHeight: CGFloat = 24
 }
 
 /// Dragging a folder onto the notch starts an agent there.

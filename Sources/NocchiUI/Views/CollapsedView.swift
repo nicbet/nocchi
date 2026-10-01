@@ -9,6 +9,7 @@ struct CollapsedView: View {
         let h = model.geometry.notchSize.height
         let store = model.store
         let (others, hidden) = store.others(fitting: 4)
+        VStack(spacing: 0) {
         HStack(spacing: 0) {
             FaceView(mood: store.primary.map(store.mood(of:)) ?? store.emptyMood,
                      size: (h * 0.66).rounded(), seed: store.primary?.faceSeed ?? 0.37)
@@ -22,7 +23,14 @@ struct CollapsedView: View {
             Cluster(model: model, others: others, hidden: hidden)
                 .frame(width: model.earWidth, height: h)
         }
-        .frame(width: model.bodySize(for: .collapsed).width, height: h)
+        .frame(height: h)
+            if let banner = model.banner {
+                BannerRow(banner: banner)
+                    .frame(height: NotchModel.bannerHeight)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(width: model.bodySize(for: .collapsed).width, height: model.bodySize(for: .collapsed).height, alignment: .top)
     }
 
 }
@@ -113,5 +121,25 @@ private struct StatusText: View {
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .move(edge: .top).combined(with: .opacity)
         )
+    }
+}
+
+/// The mini peek's line: "✓ Servaint finished", tinted by outcome.
+private struct BannerRow: View {
+    let banner: PeekBanner
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: banner.symbol)
+                .font(.system(size: 10, weight: .bold))
+            Text(banner.text)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .foregroundStyle(banner.mood.tint)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
     }
 }

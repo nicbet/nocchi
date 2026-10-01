@@ -31,10 +31,14 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .facesPaused(model.facesPaused)
         .facesRenderStill(renderStill || model.isMorphing)
-        .animation(model.mode == .expanded && !reduceMotion ? Self.expandSpring : Self.collapseSpring, value: model.mode)
+        .animation(model.mode == .expanded && !reduceMotion ? (model.isPeeking ? Self.peekSpring : Self.expandSpring) : Self.collapseSpring,
+                   value: model.mode)
+        .animation(.easeOut(duration: 0.25), value: model.banner)
         .animation(.spring(duration: 0.4, bounce: 0.15), value: model.drop)
     }
 
+    /// Opening by itself (a peek) doesn't bounce: it shouldn't pull at your eye more than needed.
+    static let peekSpring = Animation.spring(duration: 0.4, bounce: 0)
     /// Opening can overshoot: the bounce reads as playful.
     static let expandSpring = Animation.spring(duration: 0.45, bounce: 0.28)
     /// Closing must not overshoot, or the shape briefly shrinks past its collapsed size

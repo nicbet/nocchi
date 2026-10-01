@@ -50,8 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         connectionItem.isEnabled = false
         menu.addItem(connectionItem)
         menu.addItem(.separator())
-        menu.addItem(toggle("Peek When Agents Need You", \.autoPeek,
-                            tip: "Open the notch for a moment when an agent needs you, failed or finished."))
+        menu.addItem(peekMenuItem())
         menu.addItem(toggle("Play Sounds", \.playsSounds, tip: "A short sound when an agent needs you, failed or finished."))
         menu.addItem(toggle("Show Status Text", \.showsStatusText,
                             tip: "On screens without a notch, show messages like “Nocchi finished” between the faces."))
@@ -87,6 +86,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.state = NocchiSettings.shared[keyPath: setting] ? .on : .off
         item.toolTip = tip
         return item
+    }
+
+    /// Everything / Only When Needed / Never.
+    private func peekMenuItem() -> NSMenuItem {
+        let menu = NSMenu()
+        for level in PeekLevel.allCases {
+            let item = menu.addItem(withTitle: level.title, action: #selector(selectPeekLevel(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = level.rawValue
+            item.state = NocchiSettings.shared.peekLevel == level ? .on : .off
+        }
+        menu.items[0].toolTip = "Open the notch when an agent needs you; a one-line banner when one finishes or fails."
+        menu.items[1].toolTip = "Open the notch only when an agent needs you."
+        let item = NSMenuItem(title: "Peek", action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
+    }
+
+    @objc private func selectPeekLevel(_ sender: NSMenuItem) {
+        guard let level = (sender.representedObject as? String).flatMap(PeekLevel.init(rawValue:)) else { return }
+        NocchiSettings.shared.peekLevel = level
+        for item in sender.menu?.items ?? [] { item.state = item === sender ? .on : .off }
     }
 
     @objc private func toggleSetting(_ sender: NSMenuItem) {

@@ -54,6 +54,19 @@ public enum NotchSnapshot {
         // Everyone else calm: the cluster folds into a pill.
         urls.append(try render(previewStore(.calm), mode: .collapsed, geometry: geometry, scale: scale,
                                to: directory.appendingPathComponent("notch-calm-collapsed.png")))
+        // The mini peek under a laptop's notch: a single finish, then a mixed burst.
+        do {
+            let laptop = NotchGeometry.make(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
+                                            topLeftArea: CGRect(x: 0, y: 0, width: 663, height: 32),
+                                            topRightArea: CGRect(x: 0, y: 0, width: 663, height: 32), menuBarHeight: 32)
+            let model = NotchModel(geometry: laptop, store: previewStore(.showcase))
+            let one = AgentRef(adapter: "mock", localID: "research")
+            model.banner = PeekBanner(ref: one, name: "Research", mood: .done)
+            urls.append(try render(model, mode: .collapsed, scale: scale, to: directory.appendingPathComponent("notch-banner.png")))
+            model.banner = model.banner?.adding(AgentRef(adapter: "mock", localID: "travel"), mood: .done)
+                .adding(AgentRef(adapter: "mock", localID: "comms"), mood: .error)
+            urls.append(try render(model, mode: .collapsed, scale: scale, to: directory.appendingPathComponent("notch-banner-burst.png")))
+        }
         // The chips card adapts to how many others there are (1 agent: no chips card).
         for count in [1, 2, 4, 5, 7, 9] {
             let scenario = MockScenario(name: "\(count)", agents: (0..<count).map { i in

@@ -16,9 +16,9 @@ public final class NocchiSettings {
         didSet { defaults.set(ignoresReduceMotion, forKey: Keys.ignoresReduceMotion) }
     }
 
-    /// Open the notch briefly when an agent needs you, failed or finished.
-    public var autoPeek: Bool {
-        didSet { defaults.set(autoPeek, forKey: Keys.autoPeek) }
+    /// How much the notch may interrupt: open for "needs you", a banner for finished or failed.
+    public var peekLevel: PeekLevel {
+        didSet { defaults.set(peekLevel.rawValue, forKey: Keys.peekLevel) }
     }
 
     /// Show messages and a summary in the middle of the collapsed notch on screens without a
@@ -59,7 +59,9 @@ public final class NocchiSettings {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
-        autoPeek = defaults.object(forKey: Keys.autoPeek) as? Bool ?? true
+        // Earlier versions stored an on/off `autoPeek`.
+        peekLevel = defaults.string(forKey: Keys.peekLevel).flatMap(PeekLevel.init(rawValue:))
+            ?? (defaults.object(forKey: Keys.autoPeek) as? Bool == false ? .never : .everything)
         showsStatusText = defaults.object(forKey: Keys.showsStatusText) as? Bool ?? true
         playsSounds = defaults.bool(forKey: Keys.playsSounds)
         screenName = defaults.string(forKey: Keys.screenName)
@@ -72,6 +74,7 @@ public final class NocchiSettings {
     private enum Keys {
         static let ignoresReduceMotion = "ignoresReduceMotion"
         static let autoPeek = "autoPeek"
+        static let peekLevel = "peekLevel"
         static let showsStatusText = "showsStatusText"
         static let playsSounds = "playsSounds"
         static let screenName = "screenName"
