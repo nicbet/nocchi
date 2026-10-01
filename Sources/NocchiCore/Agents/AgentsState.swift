@@ -76,6 +76,24 @@ public struct AgentsState: Hashable, Sendable {
         return agents.values.filter { $0.ref != primary }.sorted { $0.slot < $1.slot }
     }
 
+    /// The others for a row of `spots` places. Without overflow that's everyone, in slot order.
+    /// With overflow, the last spot is kept for a "+N" summary of `hidden`, and the shown spots go to
+    /// agents that need attention first, so one that needs you is never hidden. Shown agents stay in
+    /// slot order; `hidden` is in slot order too.
+    public func others(at now: Date, fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
+        let all = others(at: now)
+        guard all.count > spots else { return (all, []) }
+        let room = max(spots - 1, 0)
+        let urgent = all.filter(\.needsAttention).sorted { order($0, $1, now) }
+        let picked = Set((urgent + all.filter { !$0.needsAttention }).prefix(room).map(\.ref))
+        return (all.filter { picked.contains($0.ref) }, all.filter { !picked.contains($0.ref) })
+    }
+
+    /// The most urgent of `entries`, e.g. to tint a "+N" summary.
+    public func mostUrgent(_ entries: [AgentEntry], at now: Date) -> AgentEntry? {
+        entries.min { order($0, $1, now) }
+    }
+
     private func order(_ a: AgentEntry, _ b: AgentEntry, _ now: Date) -> Bool {
         let (x, y) = (a.attention(at: now), b.attention(at: now))
         return x != y ? x < y : a.info.changedAt > b.info.changedAt

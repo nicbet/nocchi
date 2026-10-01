@@ -115,6 +115,25 @@ func reduce(_ events: [AgentEvent], from adapter: AdapterID = mock, into state: 
         #expect(state.others(at: t0).map(\.ref) == [ref("a"), ref("c")])
     }
 
+    @Test func withoutOverflowEveryoneShowsInSlotOrder() {
+        let state = reduce([.snapshot([agent("p", .blocked), agent("a", .idle), agent("b", .working), agent("c", .idle)])])
+        let (shown, hidden) = state.others(at: t0, fitting: 4)
+        #expect(shown.map(\.ref) == [ref("a"), ref("b"), ref("c")])
+        #expect(hidden.isEmpty)
+    }
+
+    @Test func withOverflowAgentsThatNeedYouAreNeverHidden() {
+        // p is primary (most urgent). Slots 1–4 are calm; e (slot 5) and f (slot 6) need you.
+        let state = reduce([.snapshot([
+            agent("p", .blocked, changed: 9), agent("a", .idle), agent("b", .working), agent("c", .idle),
+            agent("d", .idle), agent("e", .done), agent("f", .blocked),
+        ])])
+        let (shown, hidden) = state.others(at: t0, fitting: 4)
+        #expect(shown.map(\.ref) == [ref("a"), ref("e"), ref("f")], "3 spots + the +N spot; urgent first, shown in slot order")
+        #expect(hidden.map(\.ref) == [ref("b"), ref("c"), ref("d")])
+        #expect(state.mostUrgent(hidden, at: t0)?.ref == ref("b"), "working beats idle")
+    }
+
     @Test func noAgentsNoPrimary() {
         #expect(AgentsState().primary(at: t0) == nil)
     }

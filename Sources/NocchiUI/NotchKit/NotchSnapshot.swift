@@ -12,6 +12,11 @@ public enum NotchSnapshot {
         var urls = try [NotchMode.collapsed, .expanded].map { mode in
             try render(previewStore(.showcase), mode: mode, geometry: geometry, scale: scale, to: directory.appendingPathComponent("notch-\(mode).png"))
         }
+        // More agents than spots: the overflow badge and chip.
+        for mode in [NotchMode.collapsed, .expanded] {
+            urls.append(try render(previewStore(.crowd), mode: mode, geometry: geometry, scale: scale,
+                                   to: directory.appendingPathComponent("notch-crowd-\(mode).png")))
+        }
         do {
             let model = NotchModel(geometry: geometry, store: previewStore(.quiet))
             model.isGreeting = true

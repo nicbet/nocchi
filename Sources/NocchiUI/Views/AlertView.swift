@@ -102,11 +102,15 @@ private struct OthersColumn: View {
     let excluding: AgentRef
 
     var body: some View {
-        let others = store.others.filter { $0.ref != excluding }.prefix(4)
+        let (others, hidden) = store.others(fitting: 4)
         if !others.isEmpty {
             VStack(spacing: 4) {
-                ForEach(Array(others), id: \.ref) { other in
+                ForEach(others.filter { $0.ref != excluding }, id: \.ref) { other in
                     FaceView(mood: store.mood(of: other), size: 18, seed: other.faceSeed)
+                        .frame(width: 22, height: 22)
+                }
+                if !hidden.isEmpty {
+                    OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: 18)
                         .frame(width: 22, height: 22)
                 }
             }

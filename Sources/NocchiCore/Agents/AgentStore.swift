@@ -19,6 +19,16 @@ public final class AgentStore {
 
     public func mood(of entry: AgentEntry) -> Mood { entry.mood(at: now) }
 
+    /// See `AgentsState.others(at:fitting:)`.
+    public func others(fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
+        state.others(at: now, fitting: spots)
+    }
+
+    /// The mood that tints a "+N" summary of `hidden` agents.
+    public func summaryMood(of hidden: [AgentEntry]) -> Mood? {
+        state.mostUrgent(hidden, at: now).map(mood(of:))
+    }
+
     /// Starts consuming `adapter`'s events. Replaces a running adapter with the same ID.
     public func run(_ adapter: AgentAdapter) {
         stop(adapter.id)

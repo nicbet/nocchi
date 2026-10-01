@@ -130,8 +130,8 @@ private struct ChipsCard: View {
 
     var body: some View {
         let others = store.others
-        let visible = others.count > Self.maxChips ? Array(others.prefix(Self.maxChips - 1)) : others
-        let overflow = others.count - visible.count
+        let (visible, hidden) = store.others(fitting: Self.maxChips)
+        let overflow = hidden.count
         Group {
             if others.isEmpty {
                 Text("No other agents").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -144,7 +144,7 @@ private struct ChipsCard: View {
                                 if index < visible.count {
                                     AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
                                 } else if index == visible.count, overflow > 0 {
-                                    OverflowChip(count: overflow)
+                                    OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
                                 } else {
                                     Color.clear.frame(height: 34)
                                 }
@@ -187,15 +187,18 @@ private struct AgentChip: View {
     }
 }
 
+/// Tinted by the most urgent hidden agent.
 private struct OverflowChip: View {
     let count: Int
+    let mood: Mood
 
     var body: some View {
         Text("+\(count) more")
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(mood.tint)
             .frame(height: 34)
             .frame(maxWidth: .infinity)
-            .background(Capsule().fill(.white.opacity(0.06)))
+            .background(Capsule().fill(mood.tint.opacity(0.1)))
+            .overlay(Capsule().strokeBorder(mood.tint.opacity(0.3), lineWidth: 1))
     }
 }
