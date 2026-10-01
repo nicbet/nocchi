@@ -4,18 +4,29 @@ import AppKit
 /// terminal to the front. `agent.focus` only switches panes inside Herdr.
 public enum HerdrTerminal {
     /// Brings the terminal running a Herdr client to the front. Returns false if none was found.
+    ///
+    /// Since macOS 14 a background app can't activate another one: `activate()` and
+    /// `NSWorkspace.openApplication` both quietly leave the frontmost app in place. Handing the
+    /// request to `/usr/bin/open` works and needs no Automation permission.
     @discardableResult
     @MainActor
     public static func bringToFront() async -> Bool {
         guard let app = await hostApp() else { return false }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        if let url = app.bundleURL {
-            // Opening a running app activates it, which works from a background app where
-            // `activate()` may be refused under cooperative activation.
-            return (try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)) != nil
+        let arguments: [String]
+        if let bundleID = app.bundleIdentifier {
+            arguments = ["-b", bundleID]
+        } else if let url = app.bundleURL {
+            arguments = ["-a", url.path]
+        } else {
+            return app.activate()
         }
-        return app.activate()
+        return await withCheckedContinuation { continuation in
+            let open = Foundation.Process()
+            open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            open.arguments = arguments
+            open.terminationHandler = { continuation.resume(returning: $0.terminationStatus == 0) }
+            do { try open.run() } catch { continuation.resume(returning: false) }
+        }
     }
 
     /// The first regular app up the parent chain of a Herdr client process.

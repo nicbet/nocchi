@@ -83,28 +83,46 @@ extension AgentStore {
 }
 
 extension View {
-    /// Clicking focuses `entry`'s agent (and its terminal), if its adapter can.
-    func focusesAgent(_ entry: AgentEntry?, in store: AgentStore) -> some View {
-        modifier(FocusOnClick(entry: entry, store: store))
+    /// Makes the view a button with press feedback; `action` nil leaves it inert.
+    func onAgentClick(help: String, _ action: (@MainActor () -> Void)?) -> some View {
+        modifier(AgentClick(help: help, action: action))
     }
 }
 
-private struct FocusOnClick: ViewModifier {
-    let entry: AgentEntry?
-    let store: AgentStore
+private struct AgentClick: ViewModifier {
+    let help: String
+    let action: (@MainActor () -> Void)?
 
     func body(content: Content) -> some View {
-        if let entry, store.capabilities(of: entry.ref).contains(.focus) {
-            Button {
-                Task { try? await store.perform(.focus(entry.ref)) }
-            } label: {
+        if let action {
+            Button(action: action) {
                 content.contentShape(Rectangle())
             }
             .buttonStyle(PressScale())
-            .help("Open \(entry.info.displayName)")
+            .help(help)
         } else {
             content
         }
+    }
+}
+
+extension NotchModel {
+    /// Clicking the primary agent: write to it when it's idle; otherwise jump to it in its
+    /// terminal (it needs you, finished, failed, or you want to watch it work).
+    func activatePrimary(_ entry: AgentEntry) {
+        let mood = store.mood(of: entry)
+        let capabilities = store.capabilities(of: entry.ref)
+        if (mood == .idle || mood == .sleep), capabilities.contains(.prompt) {
+            prompt = .composing(entry.ref)
+        } else if capabilities.contains(.focus) {
+            let store = store
+            Task { try? await store.perform(.open(entry.ref)) }
+        }
+    }
+
+    func primaryClickHelp(_ entry: AgentEntry) -> String {
+        let mood = store.mood(of: entry)
+        return mood == .idle || mood == .sleep ? "Message \(entry.info.displayName)" : "Open \(entry.info.displayName) in the terminal"
     }
 }
 

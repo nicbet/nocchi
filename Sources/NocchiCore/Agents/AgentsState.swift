@@ -61,18 +61,19 @@ public struct AgentsState: Hashable, Sendable {
     /// How long the `done` face shows after a turn finishes in a pane that's being looked at.
     public static let celebrationDuration: TimeInterval = 3
 
-    /// The face on the left: the most urgent agent that needs attention, else the focused one,
-    /// else the one that changed most recently.
-    public func primary(at now: Date) -> AgentEntry? {
+    /// The face on the left: the most urgent agent that needs attention, else the one selected in
+    /// nocchi, else the focused one, else the one that changed most recently.
+    public func primary(at now: Date, preferring selected: AgentRef? = nil) -> AgentEntry? {
         let all = Array(agents.values)
         if let urgent = all.filter(\.needsAttention).min(by: { order($0, $1, now) }) { return urgent }
+        if let selected, let entry = agents[selected] { return entry }
         if let focused = all.first(where: \.info.isFocused) { return focused }
         return all.max { ($0.info.changedAt, -$0.slot) < ($1.info.changedAt, -$1.slot) }
     }
 
     /// Everyone but the primary, in stable slot order.
-    public func others(at now: Date) -> [AgentEntry] {
-        let primary = primary(at: now)?.ref
+    public func others(at now: Date, preferring selected: AgentRef? = nil) -> [AgentEntry] {
+        let primary = primary(at: now, preferring: selected)?.ref
         return agents.values.filter { $0.ref != primary }.sorted { $0.slot < $1.slot }
     }
 
@@ -80,8 +81,8 @@ public struct AgentsState: Hashable, Sendable {
     /// With overflow, the last spot is kept for a "+N" summary of `hidden`, and the shown spots go to
     /// agents that need attention first, so one that needs you is never hidden. Shown agents stay in
     /// slot order; `hidden` is in slot order too.
-    public func others(at now: Date, fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
-        let all = others(at: now)
+    public func others(at now: Date, fitting spots: Int, preferring selected: AgentRef? = nil) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
+        let all = others(at: now, preferring: selected)
         guard all.count > spots else { return (all, []) }
         let room = max(spots - 1, 0)
         let urgent = all.filter(\.needsAttention).sorted { order($0, $1, now) }

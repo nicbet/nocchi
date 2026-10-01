@@ -14,14 +14,22 @@ public final class AgentStore {
 
     public init() {}
 
-    public var primary: AgentEntry? { state.primary(at: now) }
-    public var others: [AgentEntry] { state.others(at: now) }
+    /// Chosen in nocchi (a chip click). Shown as the primary face unless something is urgent.
+    /// Local on purpose: selecting doesn't switch panes in the terminal.
+    public private(set) var selected: AgentRef?
+
+    public var primary: AgentEntry? { state.primary(at: now, preferring: selected) }
+    public var others: [AgentEntry] { state.others(at: now, preferring: selected) }
+
+    public func select(_ ref: AgentRef?) {
+        selected = ref
+    }
 
     public func mood(of entry: AgentEntry) -> Mood { entry.mood(at: now) }
 
     /// See `AgentsState.others(at:fitting:)`.
     public func others(fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
-        state.others(at: now, fitting: spots)
+        state.others(at: now, fitting: spots, preferring: selected)
     }
 
     /// The mood that tints a "+N" summary of `hidden` agents.
@@ -53,7 +61,7 @@ public final class AgentStore {
 
     public func perform(_ action: AgentAction) async throws {
         let adapterID: AdapterID = switch action {
-        case .focus(let ref), .prompt(let ref, _): ref.adapter
+        case .focus(let ref), .open(let ref), .prompt(let ref, _): ref.adapter
         case .start: runs.first { $0.value.adapter.capabilities.contains(.start) }?.key ?? "none"
         }
         guard let adapter = runs[adapterID]?.adapter else { throw AgentActionError.failed("No adapter \(adapterID)") }

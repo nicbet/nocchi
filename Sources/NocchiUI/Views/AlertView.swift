@@ -28,10 +28,12 @@ struct AlertView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { Task { try? await store.perform(.open(entry.ref)) } }
 
             if store.capabilities(of: entry.ref).contains(.focus) {
                 Button {
-                    Task { try? await store.perform(.focus(entry.ref)) }
+                    Task { try? await store.perform(.open(entry.ref)) }
                 } label: {
                     Image(systemName: mood == .error ? "arrow.clockwise" : "arrow.up.forward.app")
                         .font(.system(size: 16, weight: .semibold))

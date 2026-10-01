@@ -125,13 +125,16 @@ public enum AgentEvent: Hashable, Sendable {
 }
 
 public enum AgentAction: Hashable, Sendable {
+    /// Switch the source to this agent (Herdr: focus its pane).
     case focus(AgentRef)
+    /// Focus the agent and bring the app it runs in to the front.
+    case open(AgentRef)
     case prompt(AgentRef, String)
     case start(kind: AgentKind, cwd: URL)
 
     public var requiredCapability: AdapterCapabilities {
         switch self {
-        case .focus: .focus
+        case .focus, .open: .focus
         case .prompt: .prompt
         case .start: .start
         }

@@ -134,6 +134,15 @@ func reduce(_ events: [AgentEvent], from adapter: AdapterID = mock, into state: 
         #expect(state.mostUrgent(hidden, at: t0)?.ref == ref("b"), "working beats idle")
     }
 
+    @Test func aSelectedAgentIsPrimaryUnlessSomethingIsUrgent() {
+        let calm = reduce([.snapshot([agent("a", .idle, focused: true), agent("b", .working), agent("c", .idle)])])
+        #expect(calm.primary(at: t0, preferring: ref("c"))?.ref == ref("c"), "beats the focused one")
+        #expect(calm.others(at: t0, preferring: ref("c")).map(\.ref) == [ref("a"), ref("b")])
+        #expect(calm.primary(at: t0, preferring: ref("gone"))?.ref == ref("a"), "a vanished selection is ignored")
+        let urgent = reduce([.snapshot([agent("a", .blocked), agent("c", .idle)])])
+        #expect(urgent.primary(at: t0, preferring: ref("c"))?.ref == ref("a"))
+    }
+
     @Test func noAgentsNoPrimary() {
         #expect(AgentsState().primary(at: t0) == nil)
     }

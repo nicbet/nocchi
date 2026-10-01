@@ -18,7 +18,10 @@ struct OverviewView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: model.geometry.notchSize.height)
             Group {
-                if let alert {
+                if let target = model.prompt.target, let entry = store.state.agents[target] {
+                    Composer(model: model, entry: entry)
+                        .transition(.blurReplace)
+                } else if let alert {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
                         .transition(.blurReplace)
                 } else {
@@ -32,6 +35,7 @@ struct OverviewView: View {
             }
             .padding(EdgeInsets(top: 8, leading: Self.gutter, bottom: 16, trailing: Self.gutter))
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
+            .animation(.spring(duration: 0.45, bounce: 0.15), value: model.prompt.target)
             .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
         .frame(width: body.width, height: body.height)
@@ -59,9 +63,8 @@ private struct FocusCard: View {
 
     var body: some View {
         let store = model.store
-        let entry = model.prompt.target.flatMap { store.state.agents[$0] } ?? store.primary
+        let entry = store.primary
         let mood = entry.map(store.mood(of:)) ?? store.emptyMood
-        let composing = entry != nil && model.prompt.target == entry?.ref
         HStack(spacing: 14) {
             HStack(spacing: 14) {
                 FaceView(mood: mood, size: Self.faceSize, seed: entry?.faceSeed ?? 0.37)
@@ -71,9 +74,7 @@ private struct FocusCard: View {
                             .frame(width: 150, height: 150)
                             .animation(.easeInOut(duration: 0.4), value: mood)
                     }
-                if let entry, composing {
-                    PromptField(model: model, entry: entry)
-                } else if let entry {
+                if let entry {
                     StepCarousel(entry: entry, mood: mood)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
@@ -85,8 +86,10 @@ private struct FocusCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .focusesAgent(composing ? nil : entry, in: store)
-            if let entry, !composing, store.capabilities(of: entry.ref).contains(.prompt) {
+            .onAgentClick(help: entry.map(model.primaryClickHelp) ?? "") {
+                if let entry { model.activatePrimary(entry) }
+            }
+            if let entry, store.capabilities(of: entry.ref).contains(.prompt) {
                 MessageButton(model: model, entry: entry, blocked: entry.info.status == .blocked)
             }
         }
@@ -114,60 +117,6 @@ private struct MessageButton: View {
         .disabled(blocked)
         .opacity(blocked ? 0.35 : 1)
         .help(blocked ? "\(entry.info.displayName) is waiting for you: answer it in the terminal" : "Message \(entry.info.displayName)")
-    }
-}
-
-/// Write to an agent: Return sends, Escape cancels.
-private struct PromptField: View {
-    let model: NotchModel
-    let entry: AgentEntry
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Message \(entry.info.displayName)")
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.45))
-            HStack(spacing: 8) {
-                TextField("What next?", text: $text)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14, weight: .medium))
-                    .focused($focused)
-                    .onSubmit { model.sendPrompt(text) }
-                    .onExitCommand { model.prompt = .none }
-                    .disabled(model.prompt == .sending(entry.ref))
-                Button {
-                    model.sendPrompt(text)
-                } label: {
-                    Image(systemName: model.prompt == .sending(entry.ref) ? "ellipsis.circle.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(text.isEmpty ? .white.opacity(0.25) : Mood.working.tint)
-                }
-                .buttonStyle(.plain)
-                .disabled(text.isEmpty)
-            }
-            .padding(.leading, 12)
-            .padding(.trailing, 6)
-            .frame(height: 34)
-            .background(Capsule().fill(.white.opacity(0.1)))
-            if case .failed(_, let message) = model.prompt {
-                Text(message)
-                    .font(.system(size: 11))
-                    .foregroundStyle(FacePalette.body(for: .error).lighter(0.2).color)
-                    .lineLimit(1)
-            } else {
-                Button("Cancel") { model.prompt = .none }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-        }
-        .task {
-            // The panel becomes key as composing starts; focus once it has.
-            try? await Task.sleep(for: .milliseconds(60))
-            focused = true
-        }
     }
 }
 
@@ -230,7 +179,9 @@ private struct ChipsCard: View {
                                 let index = row * 2 + column
                                 if index < visible.count {
                                     AgentChip(entry: visible[index], mood: store.mood(of: visible[index]))
-                                        .focusesAgent(visible[index], in: store)
+                                        .onAgentClick(help: "Show \(visible[index].info.displayName)") {
+                                            store.select(visible[index].ref)
+                                        }
                                 } else if index == visible.count, overflow > 0 {
                                     OverflowChip(count: overflow, mood: store.summaryMood(of: hidden) ?? .idle)
                                 } else {

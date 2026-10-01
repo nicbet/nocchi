@@ -22,27 +22,22 @@ public final class HerdrAdapter: AgentAdapter {
         public init() {}
     }
     public let timing: Timing
-    /// After focusing an agent, also bring the terminal hosting Herdr to the front. Off in tests,
-    /// which would otherwise yank the developer's terminal forward.
-    public let revealsTerminal: Bool
 
     /// Last known status per pane, for refusing prompts to blocked agents.
     private let statuses = Mutex<[String: AgentStatus]>([:])
 
     public init(
         client: HerdrClient, id: AdapterID = "herdr",
-        capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing(),
-        revealsTerminal: Bool = false
+        capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing()
     ) {
         self.client = client
         self.id = id
         self.capabilities = capabilities
         self.timing = timing
-        self.revealsTerminal = revealsTerminal
     }
 
-    public convenience init(socketPath: String = Herdr.socketPath(), revealsTerminal: Bool = false) {
-        self.init(client: HerdrClient(socketPath: socketPath), revealsTerminal: revealsTerminal)
+    public convenience init(socketPath: String = Herdr.socketPath()) {
+        self.init(client: HerdrClient(socketPath: socketPath))
     }
 
     // MARK: Events
@@ -194,7 +189,11 @@ public final class HerdrAdapter: AgentAdapter {
         case .focus(let ref):
             try check(ref)
             try await translating(ref) { _ = try await client.send(.focus(pane: ref.localID)) }
-            if revealsTerminal { await HerdrTerminal.bringToFront() }
+
+        case .open(let ref):
+            try check(ref)
+            try await translating(ref) { _ = try await client.send(.focus(pane: ref.localID)) }
+            if await !HerdrTerminal.bringToFront() { throw AgentActionError.failed("Couldn't find the terminal running Herdr") }
 
         case .prompt(let ref, let text):
             try check(ref)

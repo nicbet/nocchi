@@ -76,7 +76,7 @@ public enum AgentAdapterContract {
         let adapter = try await subject.makeAdapter(capabilities: [])
         let ref = AgentRef(adapter: adapter.id, localID: "anyone")
         var failures: [String] = []
-        for action in [AgentAction.focus(ref), .prompt(ref, "hi"), .start(kind: .claude, cwd: URL(fileURLWithPath: "/tmp"))] {
+        for action in [AgentAction.focus(ref), .open(ref), .prompt(ref, "hi"), .start(kind: .claude, cwd: URL(fileURLWithPath: "/tmp"))] {
             do {
                 try await adapter.perform(action)
                 failures.append("\(action) should throw .unsupported without the capability")

@@ -39,7 +39,7 @@ public actor MockAdapter: AgentAdapter {
         guard capabilities.contains(action.requiredCapability) else { throw AgentActionError.unsupported(action) }
         performed.append(action)
         switch action {
-        case .focus(let ref):
+        case .focus(let ref), .open(let ref):
             guard agents[ref.localID] != nil, ref.adapter == id else { throw AgentActionError.unknownAgent(ref) }
             for key in order {
                 let focused = key == ref.localID
