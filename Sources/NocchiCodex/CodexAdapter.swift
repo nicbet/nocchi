@@ -4,7 +4,10 @@ import NocchiCore
 import NocchiHookProtocol
 import NocchiHooks
 import NocchiTerminals
+import OSLog
 import Synchronization
+
+let codexLog = Logger(subsystem: "com.github.nicbet.nocchi", category: "codex")
 
 /// Codex CLI sessions running outside Herdr: found from `codex` processes and the rollout log
 /// each one writes, followed by tailing that log (status, steps, final messages), refined by
@@ -102,8 +105,13 @@ public final class CodexAdapter: AgentAdapter {
             case .hook(let message):
                 guard let object = try? JSONSerialization.jsonObject(with: message.input) as? [String: Any],
                       let session = object["session_id"] as? String, let name = object["hook_event_name"] as? String else { continue }
-                if leavesHerdrToHerdr, message.environment["HERDR_PANE_ID"] != nil { continue }
+                // Codex runs hooks in its app-server daemon, so their environment is the daemon's
+                // (it may well say HERDR_PANE_ID from wherever it was first started). Ownership
+                // comes from discovery instead: hooks only apply to sessions found outside Herdr.
                 events = tracker.applyHook(name, session: session, now: now)
+                if tracker.agents[session] == nil {
+                    codexLog.info("hook \(name, privacy: .public) for unknown session \(session, privacy: .public); known: \(tracker.agents.keys.sorted().joined(separator: ","), privacy: .public)")
+                }
             case .frontmost(let pid):
                 events = tracker.hostBecameFrontmost(pid, now: now)
             }

@@ -1,7 +1,10 @@
 import Darwin
 import Foundation
 import NocchiHookProtocol
+import OSLog
 import Synchronization
+
+let hookLog = Logger(subsystem: "com.github.nicbet.nocchi", category: "hooks")
 
 /// Listens on nocchi's hook socket and streams what `nocchi-hook` sends. One server per app; the
 /// native adapters each take the messages for their agent from `messages(for:)`.
@@ -100,7 +103,12 @@ public final class HookServer: Sendable {
             if data.last == 0x0A { break }
         }
         guard let message = try? JSONDecoder().decode(HookMessage.self, from: data),
-              message.version == HookMessage.currentVersion else { return }
+              message.version == HookMessage.currentVersion else {
+            hookLog.error("unreadable hook message (\(data.count) bytes)")
+            return
+        }
+        let input = (try? JSONSerialization.jsonObject(with: message.input) as? [String: Any]) ?? [:]
+        hookLog.info("\(message.agent, privacy: .public) \(input["hook_event_name"] as? String ?? "?", privacy: .public) session \(input["session_id"] as? String ?? "?", privacy: .public)")
         let targets = state.withLock { $0.subscribers.values.filter { $0.agent == message.agent }.map(\.continuation) }
         for continuation in targets { continuation.yield(message) }
     }
