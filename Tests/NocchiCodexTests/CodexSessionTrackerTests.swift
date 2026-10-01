@@ -57,9 +57,27 @@ import Testing
         #expect(tracker.agents["s1"]?.status == .blocked)
         _ = tracker.applyHook("PostToolUse", session: "s1", now: t0)
         #expect(tracker.agents["s1"]?.status == .working)
-        let aborted = tracker.apply([.turnAborted], to: "s1", now: t0)
+        // Hooks have spoken: the rollout no longer sets status; the Interrupt hook does.
+        _ = tracker.apply([.turnAborted], to: "s1", now: t0)
+        #expect(tracker.agents["s1"]?.status == .working)
+        let aborted = tracker.applyHook("Interrupt", session: "s1", now: t0)
         #expect(tracker.agents["s1"]?.status == .idle)
         #expect(!aborted.contains(.turnFinished(ref)), "you stopped it: nothing to celebrate")
         #expect(tracker.applyHook("PermissionRequest", session: "nobody", now: t0).isEmpty)
+    }
+
+    @Test func onceHooksSpeakTheRolloutOnlyAddsContent() {
+        var tracker = CodexSessionTracker()
+        _ = tracker.update(live: [session()], now: t0)
+        _ = tracker.applyHook("UserPromptSubmit", session: "s1", now: t0)
+        let stop = tracker.applyHook("Stop", session: "s1", now: t0)
+        #expect(stop.contains(.turnFinished(ref)))
+        _ = tracker.hostBecameFrontmost(7, now: t0)
+        // The rollout catches up a second later: content yes, status no.
+        let late = tracker.apply([.turnStarted, .step("Editing a.go"), .turnCompleted(lastMessage: "Done.")], to: "s1", now: t0)
+        #expect(tracker.agents["s1"]?.status == .idle)
+        #expect(!late.contains(.turnFinished(ref)), "celebrated once")
+        #expect(late.contains(.step(ref, "Editing a.go")))
+        #expect(late.contains(.message(ref, "Done.")))
     }
 }

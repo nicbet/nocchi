@@ -163,6 +163,31 @@ import Testing
         #expect(tracker.agents["s"]?.status == .blocked, "registry still says busy: unchanged, so ignored")
     }
 
+    @Test func onceHooksSpeakThePollsOnlyKeepThePresence() {
+        // The race rule 4 prevents: a hook finishes the turn, the user looks (idle), then a poll
+        // a second late says busy → idle. Without one authority it would turn green again.
+        var tracker = ClaudeSessionTracker()
+        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
+        _ = tracker.apply(ClaudeHookEvent(kind: .stopped, sessionID: "s"), now: t0)
+        _ = tracker.hostBecameFrontmost(7, now: t0)
+        #expect(tracker.agents["s"]?.status == .idle)
+        let late = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.status == .idle)
+        #expect(late.isEmpty, "no duplicate events, no second celebration")
+        #expect(tracker.hooked == ["s"])
+        // Presence still comes from the registry.
+        #expect(tracker.applyRegistry([], context: here, now: t0) == [.removed(AgentRef(adapter: "claude", localID: "s"))])
+    }
+
+    @Test func aTurnFinishedTwiceIsCelebratedOnce() {
+        var tracker = ClaudeSessionTracker()
+        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
+        let fromHook = tracker.apply(ClaudeHookEvent(kind: .stopped, sessionID: "s"), now: t0)
+        let fromPoll = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        let celebrations = (fromHook + fromPoll).filter { if case .turnFinished = $0 { true } else { false } }
+        #expect(celebrations.count == 1)
+    }
+
     @Test func goneFromTheRegistryIsGone() {
         var tracker = ClaudeSessionTracker()
         _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)

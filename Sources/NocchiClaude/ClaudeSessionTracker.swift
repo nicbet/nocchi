@@ -90,14 +90,24 @@ public struct ClaudeSessionTracker: Sendable {
     public private(set) var hosts: [String: Int32] = [:]
     /// The registry status last seen per session, to act on changes only.
     private var registryStatus: [String: String] = [:]
+    /// Sessions that have sent a hook: from then on hooks alone set their status (they're instant
+    /// and exact), and registry polls only keep them present. One authority per session, so a
+    /// late poll can't undo fresher news.
+    public private(set) var hooked: Set<String> = []
 
     public init(adapter: AdapterID = "claude", leavesHerdrToHerdr: Bool = true) {
         self.adapter = adapter
         self.leavesHerdrToHerdr = leavesHerdrToHerdr
     }
 
+    /// A hook call. Makes hooks the status authority for this session.
     public mutating func apply(_ event: ClaudeHookEvent, now: Date) -> [AgentEvent] {
         if leavesHerdrToHerdr, event.herdrPane != nil { return [] }
+        hooked.insert(event.sessionID)
+        return update(event, now: now)
+    }
+
+    private mutating func update(_ event: ClaudeHookEvent, now: Date) -> [AgentEvent] {
         let id = event.sessionID
         if event.kind == .sessionEnd {
             return remove(id)
@@ -150,7 +160,7 @@ public struct ClaudeSessionTracker: Sendable {
                                        processID: entry.pid, hostID: where_?.host, tty: where_?.tty)
             // Claude's statuses: "busy", "shell" (running a command), "waiting" (a permission
             // prompt or a question, see `waitingFor`), "idle". Every change counts.
-            if entry.status != previous {
+            if entry.status != previous, !hooked.contains(entry.sessionID) {
                 switch entry.status {
                 case "busy", "shell": hook.kind = .promptSubmitted
                 case "waiting", "needs_input", "blocked": hook.kind = .needsInput
@@ -159,7 +169,7 @@ public struct ClaudeSessionTracker: Sendable {
                 default: break
                 }
             }
-            events += apply(hook, now: now)
+            events += update(hook, now: now)
         }
         // Gone from the registry: the process exited.
         for id in agents.keys.sorted() where !live.contains(id) && processes[id] != nil {
@@ -192,6 +202,7 @@ public struct ClaudeSessionTracker: Sendable {
     private mutating func remove(_ id: String) -> [AgentEvent] {
         processes[id] = nil
         registryStatus[id] = nil
+        hooked.remove(id)
         hosts[id] = nil
         guard let info = agents.removeValue(forKey: id) else { return [] }
         return [.removed(info.ref)]

@@ -33,6 +33,10 @@ public struct CodexSessionTracker: Sendable {
     public let adapter: AdapterID
     public private(set) var agents: [String: AgentInfo] = [:]
     public private(set) var hosts: [String: Int32] = [:]
+    /// Sessions that have sent a hook: from then on hooks alone set their status; the rollout
+    /// still supplies steps and messages. One authority per session, so the slower rollout can't
+    /// undo fresher news.
+    public private(set) var hooked: Set<String> = []
 
     public init(adapter: AdapterID = "codex") {
         self.adapter = adapter
@@ -45,6 +49,7 @@ public struct CodexSessionTracker: Sendable {
         let ids = Set(live.map(\.sessionID))
         for id in agents.keys.sorted() where !ids.contains(id) {
             hosts[id] = nil
+            hooked.remove(id)
             if let info = agents.removeValue(forKey: id) { events.append(.removed(info.ref)) }
         }
         for session in live {
@@ -67,15 +72,16 @@ public struct CodexSessionTracker: Sendable {
     public mutating func apply(_ rollout: [CodexRolloutEvent], to session: String, replay: Bool = false, now: Date) -> [AgentEvent] {
         guard var info = agents[session] else { return [] }
         let old = info.status
+        let setsStatus = !hooked.contains(session)
         var steps: [String] = []
         var message: String?
         for event in rollout {
             switch event {
-            case .turnStarted: info.status = .working
+            case .turnStarted: if setsStatus { info.status = .working }
             case .turnCompleted(let last):
-                info.status = replay ? .idle : .done
+                if setsStatus { info.status = replay ? .idle : .done }
                 if let last { message = last }
-            case .turnAborted: info.status = .idle
+            case .turnAborted: if setsStatus { info.status = .idle }
             case .step(let step): steps.append(step)
             case .message(let text): message = text
             case .session: break
@@ -94,18 +100,25 @@ public struct CodexSessionTracker: Sendable {
         return events
     }
 
-    /// From Codex hooks: a permission request blocks; anything after it means work goes on.
+    /// A Codex hook call. Makes hooks the status authority for this session: a prompt or tool use
+    /// works, a permission request blocks, `Stop` finishes, `Interrupt` stops.
     public mutating func applyHook(_ name: String, session: String, now: Date) -> [AgentEvent] {
         guard var info = agents[session] else { return [] }
+        hooked.insert(session)
+        let old = info.status
         switch name {
         case "PermissionRequest": info.status = .blocked
         case "PreToolUse", "PostToolUse", "UserPromptSubmit": info.status = .working
+        case "Stop": info.status = .done
+        case "Interrupt": info.status = .idle
         default: return []
         }
-        guard info.status != agents[session]?.status else { return [] }
+        guard info.status != old else { return [] }
         info.changedAt = now
         agents[session] = info
-        return [.upserted(info)]
+        var events: [AgentEvent] = [.upserted(info)]
+        if old == .working, info.status == .done { events.append(.turnFinished(info.ref)) }
+        return events
     }
 
     /// The terminal app `host` came to the front: its finished sessions are seen.
