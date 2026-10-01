@@ -14,6 +14,8 @@ public struct ClaudeHookEvent: Equatable, Sendable {
         case stopped
         case failed(String?)
         case sessionEnd
+        /// Ready for input with nothing to report (after an answered question or a declined request).
+        case idle
         case other
     }
 
@@ -116,6 +118,7 @@ public struct ClaudeSessionTracker: Sendable {
         case .needsInput: status = .blocked
         case .stopped: status = .done
         case .failed(let reason): status = .error(reason)
+        case .idle: status = .idle
         case .idleReminder, .other: break
         case .sessionEnd: break
         }
@@ -145,11 +148,14 @@ public struct ClaudeSessionTracker: Sendable {
             registryStatus[entry.sessionID] = entry.status
             var hook = ClaudeHookEvent(kind: .other, sessionID: entry.sessionID, cwd: entry.cwd,
                                        processID: entry.pid, hostID: where_?.host, tty: where_?.tty)
+            // Claude's statuses: "busy", "shell" (running a command), "waiting" (a permission
+            // prompt or a question, see `waitingFor`), "idle". Every change counts.
             if entry.status != previous {
                 switch entry.status {
-                case "busy": hook.kind = .promptSubmitted
-                case "idle" where previous == "busy": hook.kind = .stopped
+                case "busy", "shell": hook.kind = .promptSubmitted
                 case "waiting", "needs_input", "blocked": hook.kind = .needsInput
+                case "idle" where previous == "busy" || previous == "shell": hook.kind = .stopped
+                case "idle" where previous != nil: hook.kind = .idle
                 default: break
                 }
             }

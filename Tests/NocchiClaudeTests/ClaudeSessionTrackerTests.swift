@@ -134,6 +134,27 @@ import Testing
         #expect(tracker.hosts["s"] == 7)
     }
 
+    @Test func waitingThenIdleIsAnsweredNotFinished() {
+        // Recorded with Claude Code 2.1.286: a declined permission prompt.
+        var tracker = ClaudeSessionTracker()
+        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
+        _ = tracker.applyRegistry([entry("waiting")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.status == .blocked)
+        let declined = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.status == .idle)
+        #expect(!declined.contains(.turnFinished(AgentRef(adapter: "claude", localID: "s"))))
+    }
+
+    @Test func runningACommandIsWorking() {
+        var tracker = ClaudeSessionTracker()
+        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        _ = tracker.applyRegistry([entry("shell")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.status == .working)
+        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.status == .done, "a turn that ended in a command finished")
+    }
+
     @Test func aPollNeverOverwritesFresherHookNews() {
         var tracker = ClaudeSessionTracker()
         _ = tracker.applyRegistry([entry("busy")], context: here, now: t0)
