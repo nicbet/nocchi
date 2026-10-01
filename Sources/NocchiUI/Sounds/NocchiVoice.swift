@@ -39,8 +39,12 @@ public enum NocchiVoice: String, CaseIterable, Sendable {
     }
 
     /// A 16-bit mono WAV of the sound, which `NSSound(data:)` plays.
-    public func wav() -> Data {
-        let pcm = samples().map { Int16(max(-1, min(1, $0)) * Float(Int16.max)) }
+    public func wav() -> Data { Self.wav(samples()) }
+
+    public static func wavData(_ samples: [Float]) -> Data { wav(samples) }
+
+    static func wav(_ samples: [Float]) -> Data {
+        let pcm = samples.map { Int16(max(-1, min(1, $0)) * Float(Int16.max)) }
         var data = Data()
         func append<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
         let bytes = UInt32(pcm.count * 2)
@@ -56,12 +60,16 @@ public enum NocchiVoice: String, CaseIterable, Sendable {
     // MARK: Formant synthesis
 
     enum Sound {
-        case n, o, ch, ee
+        case n, m, o, ch, ee, oo, ah, uh
 
         /// Formants (Hz) and bandwidths, raised ~30% from an adult voice for a small creature.
         var formants: [(frequency: Double, bandwidth: Double)] {
             switch self {
             case .n: [(330, 120), (1500, 300), (3000, 400)]
+            case .m: [(300, 100), (1300, 300), (2600, 400)]
+            case .oo: [(390, 90), (1050, 120), (2900, 250)]
+            case .ah: [(1050, 130), (1650, 150), (3300, 250)]
+            case .uh: [(800, 120), (1450, 140), (3200, 250)]
             case .o: [(680, 110), (1150, 130), (3200, 250)]
             case .ch: [(400, 200), (2600, 400), (4200, 500)]
             case .ee: [(380, 80), (3300, 160), (4300, 260)]
@@ -70,8 +78,8 @@ public enum NocchiVoice: String, CaseIterable, Sendable {
         /// How loud the voice is, and the hiss.
         var voicing: Double {
             switch self {
-            case .n: 0.35
-            case .o, .ee: 1
+            case .n, .m: 0.35
+            case .o, .ee, .oo, .ah, .uh: 1
             case .ch: 0
             }
         }
@@ -215,5 +223,49 @@ public enum NocchiVoice: String, CaseIterable, Sendable {
             z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
             return Double((z ^ (z >> 31)) >> 11) / Double(1 << 53)
         }
+    }
+
+    // MARK: Auditioning
+
+    /// Candidate sounds to listen to while choosing nocchi's voice (`nocchi --render-sounds`).
+    public static var candidates: [(name: String, samples: [Float])] {
+        func vowels(_ parts: [(Sound, Double, [Double])]) -> [Float] {
+            render(parts.map { Phoneme($0.0, length: $0.1, pitch: $0.2) })
+        }
+        return [
+            // A: wordless vowel glides.
+            ("A1-oo-ee-finished", vowels([(.oo, 0.12, [520, 560]), (.ee, 0.22, [700, 880, 820])])),
+            ("A1-oo-ee-needs-you", vowels([(.oo, 0.12, [500, 480]), (.ee, 0.26, [560, 620, 900])])),
+            ("A1-ee-oo-failed", vowels([(.ee, 0.12, [560, 540]), (.oo, 0.30, [470, 380, 300])])),
+            // B: "ah-oh", two sung notes.
+            ("B1-ah-oh-needs-you", vowels([(.ah, 0.16, [660, 680]), (.o, 0.24, [560, 550, 540])])),
+            ("B1-oh-ah-finished", vowels([(.o, 0.14, [520, 540]), (.ah, 0.24, [700, 800, 780])])),
+            ("B1-ah-oh-failed", vowels([(.ah, 0.16, [560, 540]), (.uh, 0.30, [440, 380, 330])])),
+            // C: "mm-hm!", a hum that opens.
+            ("C1-mm-hm-finished", vowels([(.m, 0.10, [480, 460]), (.uh, 0.05, [470]), (.m, 0.16, [620, 700, 680])])),
+            ("C1-hm-question", vowels([(.m, 0.12, [440, 430]), (.uh, 0.06, [450]), (.m, 0.20, [480, 520, 700])])),
+            // D: a two-note toy (marimba-ish), the same motif in three moods.
+            ("D1-toy-finished", toy([(0, 784), (0.11, 1175)])),
+            ("D1-toy-needs-you", toy([(0, 880), (0.11, 988), (0.22, 1175)])),
+            ("D1-toy-failed", toy([(0, 659), (0.13, 494)])),
+        ]
+    }
+
+    /// Struck, decaying notes: a fundamental with a woody fourth-ish overtone, like a small marimba.
+    static func toy(_ notes: [(start: Double, frequency: Double)]) -> [Float] {
+        let length = (notes.map(\.start).max() ?? 0) + 0.45
+        var out = [Double](repeating: 0, count: Int(length * sampleRate))
+        for note in notes {
+            let offset = Int(note.start * sampleRate)
+            for n in 0..<Int(0.45 * sampleRate) where offset + n < out.count {
+                let t = Double(n) / sampleRate
+                let body = sin(2 * .pi * note.frequency * t) * exp(-t / 0.16)
+                let overtone = 0.28 * sin(2 * .pi * note.frequency * 3.93 * t) * exp(-t / 0.035)
+                let attack = min(1, t / 0.002)
+                out[offset + n] += (body + overtone) * attack
+            }
+        }
+        let peak = out.map(abs).max() ?? 1
+        return out.map { Float($0 / peak * 0.7) }
     }
 }

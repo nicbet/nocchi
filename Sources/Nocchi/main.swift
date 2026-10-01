@@ -14,6 +14,11 @@ if let flag = CommandLine.arguments.firstIndex(of: "--render-sounds") {
         try? voice.wav().write(to: url)
         print(url.path)
     }
+    for candidate in NocchiVoice.candidates {
+        let url = dir.appending(path: "candidates/\(candidate.name).wav")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? NocchiVoice.wavData(candidate.samples).write(to: url)
+    }
     exit(0)
 }
 
