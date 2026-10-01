@@ -5,16 +5,33 @@ import SwiftUI
 struct OverviewView: View {
     let model: NotchModel
 
+    /// When the primary agent is in one of these, the expanded notch shows an alert instead.
+    static let alertMoods: Set<Mood> = [.waiting, .error, .done]
+
     var body: some View {
         let body = model.bodySize(for: .expanded)
+        let store = model.store
+        let alert = store.primary.flatMap { entry in
+            Self.alertMoods.contains(store.mood(of: entry)) ? entry : nil
+        }
         VStack(spacing: 0) {
             Color.clear.frame(height: model.geometry.notchSize.height)
-            HStack(spacing: 10) {
-                FocusCard(store: model.store)
-                    .frame(width: (body.width - 36 - 10) * 0.52)
-                ChipsCard(store: model.store)
+            Group {
+                if let alert {
+                    AlertView(store: store, entry: alert, mood: store.mood(of: alert))
+                        .transition(.blurReplace)
+                } else {
+                    HStack(spacing: 10) {
+                        FocusCard(store: store)
+                            .frame(width: (body.width - 36 - 10) * 0.52)
+                        ChipsCard(store: store)
+                    }
+                    .transition(.blurReplace)
+                }
             }
             .padding(EdgeInsets(top: 8, leading: 18, bottom: 16, trailing: 18))
+            .animation(.spring(duration: 0.45, bounce: 0.15), value: alert?.ref)
+            .animation(.spring(duration: 0.45, bounce: 0.15), value: alert.map(store.mood(of:)))
         }
         .frame(width: body.width, height: body.height)
         .environment(\.colorScheme, .dark)

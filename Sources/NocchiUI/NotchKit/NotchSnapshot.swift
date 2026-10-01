@@ -28,6 +28,23 @@ public enum NotchSnapshot {
             try data.write(to: url)
             return url
         }
+        for scenario in [MockScenario.needsYou, .failure] {
+            let model = NotchModel(geometry: geometry, store: previewStore(scenario))
+            model.mode = .expanded
+            let size = model.panelSize
+            let view = NotchView(model: model)
+                .frame(width: size.width, height: size.height)
+                .background(LinearGradient(colors: [.purple, .indigo], startPoint: .leading, endPoint: .trailing))
+                .facesRenderStill()
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = scale
+            guard let image = renderer.cgImage,
+                  let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+            else { throw SnapshotError.renderFailed(.expanded) }
+            let url = directory.appendingPathComponent("notch-alert-\(scenario.name.lowercased().replacingOccurrences(of: " ", with: "-")).png")
+            try data.write(to: url)
+            urls.append(url)
+        }
         urls.append(try writeGallery(to: directory, scale: scale))
         return urls
     }
@@ -52,7 +69,7 @@ public enum NotchSnapshot {
         }
         store.apply(.connection(.connected(version: "preview")), from: "mock")
         store.apply(.snapshot(infos), from: "mock")
-        if let first = infos.first {
+        if scenario.name == MockScenario.showcase.name, let first = infos.first {
             store.apply(.step(first.ref, "Prep workspace"), from: "mock")
             store.apply(.step(first.ref, "Copy final outputs"), from: "mock")
         }
