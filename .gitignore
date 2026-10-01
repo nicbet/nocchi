@@ -1,0 +1,13 @@
+# Reference material (kept local for now)
+screenshots/
+
+# SwiftPM / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.app
+*.dmg
+
+# macOS
+.DS_Store
