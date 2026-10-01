@@ -21,8 +21,10 @@ struct OverviewView: View {
             Color.clear.frame(height: model.geometry.notchSize.height)
             Group {
                 if let target = model.prompt.target, let entry = store.state.agents[target] {
+                    // Removal must take time: the focus card shrinks back from the composer's
+                    // frame only while the composer is still there.
                     Composer(model: model, entry: entry, card: card)
-                        .transition(.identity)
+                        .transition(.asymmetric(insertion: .identity, removal: .opacity))
                 } else if let alert {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
                         .transition(.blurReplace)
