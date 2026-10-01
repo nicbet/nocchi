@@ -2,8 +2,6 @@ import NocchiCore
 import SwiftUI
 
 /// Collapsed: the primary agent's face on the left, a 2×2 cluster of the others on the right.
-/// When the others are all idle or asleep the cluster folds into a pill, and the faces fly back
-/// out one by one as soon as one of them does something.
 struct CollapsedView: View {
     let model: NotchModel
 
@@ -29,61 +27,33 @@ struct CollapsedView: View {
 
 }
 
-/// The others: a 2×2 grid, or folded into a pill of overlapping faces while they're all calm.
+/// The others in a 2×2 grid; with more than four, the last spot is a "+N" badge.
 struct Cluster: View {
     let model: NotchModel
     let others: [AgentEntry]
     let hidden: [AgentEntry]
-    @Environment(\.nocchiReducesMotion) private var reduceMotion
-
-    /// Fold when there are at least two others and none of them is doing anything.
-    nonisolated static func folds(_ moods: [Mood]) -> Bool {
-        moods.count >= 2 && moods.allSatisfy { $0 == .idle || $0 == .sleep }
-    }
 
     var body: some View {
-        let store = model.store
-        let everyone = others + hidden
-        let folded = Self.folds(everyone.map(store.mood(of:)))
-        // Folded, the pill shows everyone in slot order (up to four); unfolded, the grid's spots.
-        let faces = folded ? Array(store.others.prefix(4)) : others
-        let size = (model.geometry.notchSize.height * 0.36).rounded()
-        let gap = (model.geometry.notchSize.height * 0.06).rounded()
-        let step = (size * 0.72).rounded()
-        let pillWidth = size + step * CGFloat(max(faces.count - 1, 0))
-
-        ZStack {
-            Capsule()
-                .fill(.white.opacity(0.12))
-                .frame(width: pillWidth + gap * 2, height: size + gap * 2)
-                .opacity(folded ? 1 : 0)
-                .scaleEffect(folded ? 1 : 0.6)
-                .animation(animation(delay: folded ? 0.12 : 0), value: folded)
-            ForEach(Array(faces.enumerated()), id: \.element.ref) { index, entry in
-                FaceView(mood: store.mood(of: entry), size: size, seed: entry.faceSeed)
-                    .frame(width: size, height: size)
-                    .zIndex(Double(index))
-                    .offset(folded
-                            ? CGSize(width: -pillWidth / 2 + size / 2 + step * CGFloat(index), height: 0)
-                            : Self.gridOffset(index, size: size, gap: gap))
-                    // Fly out one by one; fold back in the reverse order.
-                    .animation(animation(delay: folded ? Double(faces.count - 1 - index) * 0.05 : Double(index) * 0.07), value: folded)
-            }
-            if !folded, !hidden.isEmpty {
-                OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: size)
-                    .offset(Self.gridOffset(3, size: size, gap: gap))
-                    .transition(.opacity)
-            }
+        let h = model.geometry.notchSize.height
+        let size = (h * 0.36).rounded()
+        Grid(horizontalSpacing: h * 0.06, verticalSpacing: h * 0.06) {
+            GridRow { face(0, size); face(1, size) }
+            GridRow { face(2, size); face(3, size) }
         }
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: others.map(\.ref))
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: hidden.count)
     }
 
-    static func gridOffset(_ index: Int, size: CGFloat, gap: CGFloat) -> CGSize {
-        let half = (size + gap) / 2
-        return CGSize(width: index % 2 == 0 ? -half : half, height: index < 2 ? -half : half)
-    }
-
-    private func animation(delay: Double) -> Animation {
-        reduceMotion ? .easeInOut(duration: 0.25) : .spring(duration: 0.45, bounce: 0.3).delay(delay)
+    @ViewBuilder
+    private func face(_ index: Int, _ size: CGFloat) -> some View {
+        let store = model.store
+        if index == 3, !hidden.isEmpty {
+            OverflowBadge(count: hidden.count, mood: store.summaryMood(of: hidden) ?? .idle, size: size)
+        } else if index < others.count {
+            FaceView(mood: store.mood(of: others[index]), size: size, seed: others[index].faceSeed)
+        } else {
+            Color.clear.frame(width: size, height: size)
+        }
     }
 }
 
