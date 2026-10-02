@@ -90,7 +90,9 @@ public final class ClaudeAdapter: AgentAdapter {
         folders.withLock { folders in folders = tracker.agents.compactMapValues { $0.cwd?.lastPathComponent } }
     }
 
-    public func perform(_ action: AgentAction) async throws {
+    /// A started session isn't known until Claude registers it, so `.start` returns nil.
+    @discardableResult
+    public func perform(_ action: AgentAction) async throws -> AgentRef? {
         guard capabilities.contains(action.requiredCapability) else { throw AgentActionError.unsupported(action) }
         switch action {
         case .focus(let ref), .open(let ref):
@@ -114,6 +116,7 @@ public final class ClaudeAdapter: AgentAdapter {
         case .prompt:
             throw AgentActionError.unsupported(action)
         }
+        return nil
     }
 }
 

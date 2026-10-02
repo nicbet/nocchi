@@ -152,6 +152,27 @@ func reduce(_ events: [AgentEvent], from adapter: AdapterID = mock, into state: 
         #expect(later.primary(at: t0, preferring: ref("c"), selectedAt: clickedAt)?.ref == ref("e"))
     }
 
+    @Test func aStartedAgentGivesWayToAnyAgentThatNeedsYou() {
+        let startedAt = t0.addingTimeInterval(5)
+        // Not reported yet: the selection waits for it.
+        let before = reduce([.snapshot([agent("a", .idle, focused: true)])])
+        #expect(before.primary(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true)?.ref == ref("a"))
+        let appeared = reduce([.snapshot([agent("a", .idle, focused: true), agent("new", .working, changed: 6)])])
+        #expect(appeared.primary(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true)?.ref == ref("new"))
+
+        // w was already waiting before the start: it wins, unlike after a chip click.
+        let waiting = reduce([.snapshot([agent("w", .blocked, changed: 1), agent("new", .working, changed: 6)])])
+        #expect(waiting.primary(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true)?.ref == ref("w"))
+        #expect(waiting.primary(at: t0, preferring: ref("new"), selectedAt: startedAt)?.ref == ref("new"), "a chip click holds")
+        #expect(waiting.others(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true).map(\.ref) == [ref("new")])
+
+        // Once nobody else needs you, it's back; and when it asks something itself, it stays.
+        let answered = reduce([.snapshot([agent("w", .idle, changed: 7), agent("new", .working, changed: 6)])])
+        #expect(answered.primary(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true)?.ref == ref("new"))
+        let asks = reduce([.snapshot([agent("w", .idle, changed: 7), agent("new", .blocked, changed: 8)])])
+        #expect(asks.primary(at: t0, preferring: ref("new"), selectedAt: startedAt, yields: true)?.ref == ref("new"))
+    }
+
     @Test func messagesAreKeptPerAgent() {
         let state = reduce([.snapshot([agent("a", .working)]), .message(ref("a"), "All done."), .message(ref("x"), "ignored")])
         #expect(state.agents[ref("a")]?.lastMessage == "All done.")

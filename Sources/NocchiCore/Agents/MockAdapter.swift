@@ -35,7 +35,8 @@ public actor MockAdapter: AgentAdapter {
         return stream
     }
 
-    public func perform(_ action: AgentAction) async throws {
+    @discardableResult
+    public func perform(_ action: AgentAction) async throws -> AgentRef? {
         guard capabilities.contains(action.requiredCapability) else { throw AgentActionError.unsupported(action) }
         performed.append(action)
         switch action {
@@ -56,7 +57,9 @@ public actor MockAdapter: AgentAdapter {
                 info.title = String(prompt.prefix(60))
             }
             add(info)
+            return info.ref
         }
+        return nil
     }
 
     // MARK: Test and demo hooks

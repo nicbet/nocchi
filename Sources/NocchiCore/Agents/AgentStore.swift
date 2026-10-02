@@ -19,20 +19,26 @@ public final class AgentStore {
     public private(set) var selected: AgentRef?
     /// When it was selected: anything needing attention after that takes over again.
     public private(set) var selectedAt: Date = .distantPast
+    /// The selection gives way to any agent that needs attention, not only to news since.
+    public private(set) var selectionYields = false
 
-    public var primary: AgentEntry? { state.primary(at: now, preferring: selected, selectedAt: selectedAt) }
-    public var others: [AgentEntry] { state.others(at: now, preferring: selected, selectedAt: selectedAt) }
+    public var primary: AgentEntry? { state.primary(at: now, preferring: selected, selectedAt: selectedAt, yields: selectionYields) }
+    public var others: [AgentEntry] { state.others(at: now, preferring: selected, selectedAt: selectedAt, yields: selectionYields) }
 
-    public func select(_ ref: AgentRef?) {
+    /// Makes `ref` the primary face (it may not have appeared yet). A chip click holds until
+    /// something new needs attention; a newly started agent (`yieldsToAnyUrgent`) only while
+    /// nothing else needs attention at all.
+    public func select(_ ref: AgentRef?, yieldsToAnyUrgent: Bool = false) {
         selected = ref
         selectedAt = Date()
+        selectionYields = yieldsToAnyUrgent
     }
 
     public func mood(of entry: AgentEntry) -> Mood { entry.mood(at: now) }
 
     /// See `AgentsState.others(at:fitting:)`.
     public func others(fitting spots: Int) -> (shown: [AgentEntry], hidden: [AgentEntry]) {
-        state.others(at: now, fitting: spots, preferring: selected, selectedAt: selectedAt)
+        state.others(at: now, fitting: spots, preferring: selected, selectedAt: selectedAt, yields: selectionYields)
     }
 
     /// The mood that tints a "+N" summary of `hidden` agents.
@@ -62,13 +68,14 @@ public final class AgentStore {
         state.connections[id] = nil
     }
 
-    public func perform(_ action: AgentAction) async throws {
+    @discardableResult
+    public func perform(_ action: AgentAction) async throws -> AgentRef? {
         let adapterID: AdapterID = switch action {
         case .focus(let ref), .open(let ref), .prompt(let ref, _): ref.adapter
         case .start: starter ?? "none"
         }
         guard let adapter = runs[adapterID]?.adapter else { throw AgentActionError.failed("No adapter \(adapterID)") }
-        try await adapter.perform(action)
+        return try await adapter.perform(action)
     }
 
     public func isRunning(_ id: AdapterID) -> Bool { runs[id] != nil }

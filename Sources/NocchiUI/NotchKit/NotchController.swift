@@ -282,7 +282,9 @@ public final class NotchController {
             guard let store = self?.model.store else { return }
             let result: DropState
             do {
-                try await store.perform(.start(kind: .claude, cwd: folder))
+                if let started = try await store.perform(.start(kind: .claude, cwd: folder)) {
+                    store.select(started, yieldsToAnyUrgent: true)
+                }
                 result = .started(folder: folder)
             } catch {
                 result = .failed(folder: folder, message: Self.describe(error))

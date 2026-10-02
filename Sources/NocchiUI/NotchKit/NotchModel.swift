@@ -112,10 +112,12 @@ public final class NotchModel {
         prompt = .sending(target)
         Task {
             do {
-                try await store.perform(action)
+                let started = try await store.perform(action)
                 if case .start(_, let folder, _) = action {
                     NocchiSettings.shared.rememberChatFolder(folder)
                     newChatDraft = ""
+                    // The new agent is the main face, unless another one needs you.
+                    if let started { store.select(started, yieldsToAnyUrgent: true) }
                 }
                 if prompt == .sending(target) { prompt = .none }
             } catch {

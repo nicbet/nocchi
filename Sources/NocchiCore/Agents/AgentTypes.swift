@@ -179,6 +179,8 @@ public protocol AgentAdapter: AnyObject, Sendable {
     /// Starts on first iteration, stops when the consumer cancels.
     func events() -> AsyncStream<AgentEvent>
 
-    /// Throws `AgentActionError.unsupported` if the capability is missing.
-    func perform(_ action: AgentAction) async throws
+    /// Throws `AgentActionError.unsupported` if the capability is missing. For `.start`, returns
+    /// the new agent when the adapter knows it (it may not have reported it yet).
+    @discardableResult
+    func perform(_ action: AgentAction) async throws -> AgentRef?
 }

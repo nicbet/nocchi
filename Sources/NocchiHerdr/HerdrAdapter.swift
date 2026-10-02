@@ -226,7 +226,8 @@ public final class HerdrAdapter: AgentAdapter {
 
     // MARK: Actions
 
-    public func perform(_ action: AgentAction) async throws {
+    @discardableResult
+    public func perform(_ action: AgentAction) async throws -> AgentRef? {
         guard capabilities.contains(action.requiredCapability) else { throw AgentActionError.unsupported(action) }
         switch action {
         case .focus(let ref):
@@ -254,8 +255,9 @@ public final class HerdrAdapter: AgentAdapter {
             }
 
         case .start(let kind, let cwd, let prompt):
-            try await start(kind: kind, cwd: cwd, prompt: prompt)
+            return try await start(kind: kind, cwd: cwd, prompt: prompt)
         }
+        return nil
     }
 
     /// Starts the agent as the process of a new pane (nothing is typed into a shell, so shell
@@ -263,7 +265,7 @@ public final class HerdrAdapter: AgentAdapter {
     /// else of a new workspace there. The message goes along as an argument where the agent's
     /// command takes one, so it waits through anything the agent asks first (Claude: trust this
     /// folder?). When the agent exits, its pane closes.
-    private func start(kind: AgentKind, cwd: URL, prompt: String?) async throws {
+    private func start(kind: AgentKind, cwd: URL, prompt: String?) async throws -> AgentRef {
         struct Panes: Decodable, Sendable {
             var panes: [Pane]
             struct Pane: Decodable, Sendable { var workspace_id: String; var cwd: String?; var foreground_cwd: String? }
@@ -307,8 +309,10 @@ public final class HerdrAdapter: AgentAdapter {
             throw error
         }
         if let shell { _ = try? await client.send(.closePane(shell)) }
+        // Herdr's agent ID is its pane.
+        let ref = AgentRef(adapter: id, localID: pane)
 
-        guard let prompt, !takesPrompt else { return }
+        guard let prompt, !takesPrompt else { return ref }
         // The agent stays either way: it's running, only the first message didn't arrive.
         do {
             try await translating(nil) {
@@ -319,6 +323,7 @@ public final class HerdrAdapter: AgentAdapter {
         } catch {
             throw AgentActionError.failed("Started \(kind.displayName), but couldn't send it the message")
         }
+        return ref
     }
 
     /// A folder path as Herdr reports it (`/tmp` is `/private/tmp`).

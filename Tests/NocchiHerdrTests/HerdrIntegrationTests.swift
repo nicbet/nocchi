@@ -197,11 +197,15 @@ extension HerdrIntegrationTests {
 
             let adapter = HerdrAdapter(client: herdr.client, timing: .test, agentCommand: { _ in fake.path })
             let message = #"it's "quoted"  and $HOME"#
-            try await adapter.perform(.start(kind: .claude, cwd: open, prompt: message))
-            try await adapter.perform(.start(kind: .claude, cwd: open, prompt: "again"))   // no name to clash
-            try await adapter.perform(.start(kind: .claude, cwd: fresh, prompt: "Book me an apartment in New York for a week"))
+            let first = try await adapter.perform(.start(kind: .claude, cwd: open, prompt: message))
+            let second = try await adapter.perform(.start(kind: .claude, cwd: open, prompt: "again"))   // no name to clash
+            let third = try await adapter.perform(.start(kind: .claude, cwd: fresh, prompt: "Book me an apartment in New York for a week"))
 
             let panes = try await herdr.driver.call(.listPanes, as: PaneList.self).panes
+            // Each start reports its agent: the pane it runs in.
+            let started = [first, second, third].compactMap { $0 }
+            #expect(started.count == 3 && Set(started).count == 3)
+            #expect(started.allSatisfy { ref in ref.adapter == "herdr" && panes.contains { $0.pane_id == ref.localID } })
             let workspaces = try await herdr.driver.call(HerdrRequest(method: "workspace.list", params: [:]), as: WorkspaceList.self).workspaces
             #expect(workspaces.count == 2)
             #expect(panes.filter { $0.workspace_id == existing }.count == 3, "the open workspace: its shell and two agent tabs")
