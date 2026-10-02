@@ -44,7 +44,7 @@ struct Composer: View {
                         }
                         return .handled
                     }
-                    .onExitCommand { model.prompt = .none }
+                    .onExitCommand { model.dismissComposer() }
             }
             Spacer(minLength: 8)
             HStack(spacing: 10) {

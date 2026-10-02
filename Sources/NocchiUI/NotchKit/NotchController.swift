@@ -50,6 +50,7 @@ public final class NotchController {
         observeMoods()
         model.onDropFolder = { [weak self] url in self?.startAgent(in: url) }
         model.onPromptChange = { [weak self] state in self?.promptChanged(state) }
+        model.onDismissComposer = { [weak self] in self?.collapseIfAway() }
         model.onChooseFolder = { [weak self] in self?.chooseFolder() }
         // A file drag can't be seen directly from outside the dragging app, so on every press we
         // watch the drag pasteboard until the button is released.
@@ -63,7 +64,7 @@ public final class NotchController {
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { $0.screensChanged() }
         // Clicking elsewhere while writing to an agent closes the field.
         observe(NotificationCenter.default, NSWindow.didResignKeyNotification, object: panel) { controller in
-            if case .composing = controller.model.prompt, !controller.model.isChoosingFolder { controller.model.prompt = .none }
+            if !controller.model.isChoosingFolder { controller.model.dismissComposer() }
         }
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.model.screensAsleep = true }
@@ -198,6 +199,13 @@ public final class NotchController {
         case .sending, .failed:
             break
         }
+    }
+
+    /// With the pointer away, a dismissed field takes the notch with it in one motion instead of
+    /// shrinking back into the cards first. (`isHovering` can lag a click elsewhere, so ask directly.)
+    private func collapseIfAway() {
+        guard !model.hitRect.contains(NSEvent.mouseLocation), !model.holdsOpen else { return }
+        setMode(.collapsed)
     }
 
     /// Picks the new chat's folder in an open panel; the chat stays open meanwhile.

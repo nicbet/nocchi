@@ -55,6 +55,8 @@ public final class NotchModel {
     @ObservationIgnored var composerClosedAt: Date?
     var composerJustClosed: Bool { composerClosedAt.map { Date().timeIntervalSince($0) < 0.3 } ?? false }
     @ObservationIgnored var onPromptChange: ((PromptState) -> Void)?
+    /// Called after the field is dismissed (Esc, a click elsewhere), not after a send or Home.
+    @ObservationIgnored var onDismissComposer: (() -> Void)?
     /// Called with the folder when one is dropped on the notch.
     @ObservationIgnored var onDropFolder: ((URL) -> Void)?
 
@@ -70,6 +72,13 @@ public final class NotchModel {
 
     /// Stay open regardless of hover.
     var holdsOpen: Bool { isPinned || drop != .none || prompt != .none || isChoosingFolder }
+
+    /// Closes the field while writing, e.g. on Esc or a click elsewhere.
+    func dismissComposer() {
+        guard case .composing = prompt else { return }
+        prompt = .none
+        onDismissComposer?()
+    }
 
     /// Opens the field that starts a new agent.
     func startNewChat() {
