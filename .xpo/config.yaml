@@ -1,0 +1,29 @@
+name: nocchi
+prefix: nchi
+default_branch: main
+version: 3
+worktrees: true
+estimation_system: fibonacci
+count_unestimated: true
+automations:
+  first_start: true
+  last_completed: true
+default_labels:
+  - bug
+  - feature
+  - epic
+  - improvement
+labels:
+  bug: "#eb5757"
+  feature: "#b36cd9"
+  epic: "#5e6ad2"
+  improvement: "#4da6e8"
+drive:
+  supervisor:
+    agent: claude
+    model: sonnet
+  coder:
+    agent: claude
+  max_retries: 3
+  timeout: 30m
+  # test_cmd: make test

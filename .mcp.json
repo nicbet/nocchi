@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "xpo": {
+      "args": [
+        "mcp"
+      ],
+      "command": "xpo"
+    }
+  }
+}
