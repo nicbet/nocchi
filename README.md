@@ -106,7 +106,8 @@ make live       # render the notch from your real Herdr
 `make snapshot` renders offscreen, so it needs no Screen Recording permission. The Debug menu has
 the mood gallery, a greeting replay and controls to keep the notch open.
 
-The design, architecture and milestones are in [PLAN.md](PLAN.md).
+The design, architecture and milestone history are in [PLAN.md](PLAN.md); open work is tracked
+with xpo.
 
 ## License
 
