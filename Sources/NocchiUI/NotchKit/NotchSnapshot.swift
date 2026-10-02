@@ -41,7 +41,11 @@ public enum NotchSnapshot {
         do {
             let store = previewStore(.showcase)
             let model = NotchModel(geometry: geometry, store: store)
-            if let primary = store.primary { model.prompt = .composing(.agent(primary.ref)) }
+            if var primary = store.primary?.info {
+                primary.cwd = URL(fileURLWithPath: "/Users/me/code/acme/nocchi")
+                store.apply(.upserted(primary), from: "mock")
+                model.prompt = .composing(.agent(primary.ref))
+            }
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
         }
         // The top bar beside a laptop's notch, and a new chat (a draft, the folder it starts in).
