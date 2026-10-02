@@ -99,13 +99,13 @@ struct Composer: View {
 }
 
 /// Where a new chat's agent starts: recent folders and the agents' folders, or any other.
-private struct FolderPicker: View {
+struct FolderPicker: View {
     let model: NotchModel
 
     var body: some View {
         Menu {
             ForEach(model.chatFolders, id: \.self) { folder in
-                Button(Self.abbreviated(folder)) { model.newChatFolder = folder }
+                Button(Self.label(folder, among: model.chatFolders)) { model.newChatFolder = folder }
             }
             Divider()
             Button("Choose…") { model.onChooseFolder?() }
@@ -113,7 +113,7 @@ private struct FolderPicker: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder")
                     .font(.system(size: 11, weight: .semibold))
-                Text(model.newChatFolder.map(Self.abbreviated) ?? "~")
+                Text(model.newChatFolder.map { Self.label($0) } ?? "~")
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -131,11 +131,26 @@ private struct FolderPicker: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Where the new agent works")
+        .help(model.newChatFolder.map { "Where the new agent works: \(Self.abbreviated($0))" } ?? "Where the new agent works")
     }
 
     static func abbreviated(_ folder: URL) -> String {
         (folder.path as NSString).abbreviatingWithTildeInPath
+    }
+
+    /// The folder and its parent ("acme/webapp"); whole when that saves little ("~/Projects/nocchi").
+    /// More parents when `others` has another folder that would read the same.
+    static func label(_ folder: URL, among others: [URL] = []) -> String {
+        let parts = abbreviated(folder).split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count > 2 else { return abbreviated(folder) }
+        var depth = 2
+        func tail(_ path: [String], _ depth: Int) -> String { path.suffix(depth).joined(separator: "/") }
+        let rivals = others.filter { $0.standardizedFileURL != folder.standardizedFileURL }
+            .map { abbreviated($0).split(separator: "/", omittingEmptySubsequences: false).map(String.init) }
+        while depth < parts.count, rivals.contains(where: { tail($0, depth) == tail(parts, depth) }) { depth += 1 }
+        // Keep "~/x" rather than "x" for folders right under home; a leading "" means the root.
+        if depth >= parts.count - 1 { return abbreviated(folder) }
+        return tail(parts, depth)
     }
 }
 
