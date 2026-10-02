@@ -13,6 +13,8 @@ final class IsolatedHerdr: Sendable {
     let session: String
     let socketPath: String
     private let dir: URL
+    /// A folder of the test's own under /tmp, removed with the session.
+    var directory: URL { dir }
     private let executable: URL
     private let process = Mutex<Process?>(nil)
     /// Every request the adapter under test sent, for the schema drift check.

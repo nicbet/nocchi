@@ -65,12 +65,13 @@ import Testing
         #expect(events[1] == .snapshot([]))
     }
 
-    @Test func agentNamesFollowHerdrsRules() {
-        #expect(HerdrAdapter.agentName("nocchi") == "nocchi")
-        #expect(HerdrAdapter.agentName("My Project!") == "my-project-")
-        #expect(HerdrAdapter.agentName("2048 game") == "game")
-        #expect(HerdrAdapter.agentName("") == "agent")
-        #expect(HerdrAdapter.agentName(String(repeating: "a", count: 40)).count == 32)
+    @Test func tabsAreNamedAfterTheMessage() {
+        #expect(HerdrAdapter.tabLabel("say hi", kind: .claude) == "say hi")
+        #expect(HerdrAdapter.tabLabel("Book me an apartment in New York for a week", kind: .claude) == "Book me an apartment in…")
+        #expect(HerdrAdapter.tabLabel("  spaced\n out  ", kind: .claude) == "spaced out")
+        #expect(HerdrAdapter.tabLabel(String(repeating: "a", count: 40), kind: .claude) == String(repeating: "a", count: 23) + "…")
+        #expect(HerdrAdapter.tabLabel(nil, kind: .claude) == "Claude")
+        #expect(HerdrAdapter.tabLabel("   ", kind: .codex) == "Codex")
     }
 
     @Test func linesSurviveSplitMultibyteCharacters() throws {

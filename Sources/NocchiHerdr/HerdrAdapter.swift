@@ -19,7 +19,8 @@ public final class HerdrAdapter: AgentAdapter {
         public var minBackoff: Duration = .seconds(1)
         public var maxBackoff: Duration = .seconds(10)
         public var missesBeforeClearing = 3
-        /// How long `agent.start` retries `agent_pane_busy` while a fresh pane's shell starts.
+        /// How long a first message retries `agent_not_ready` while a new agent starts (kinds
+        /// whose command doesn't take the message as an argument).
         public var startRetryWindow: Duration = .seconds(15)
         public var retryInterval: Duration = .milliseconds(250)
         public init() {}
@@ -33,13 +34,16 @@ public final class HerdrAdapter: AgentAdapter {
     private let statuses = Mutex<[String: AgentStatus]>([:])
     /// Per pane: what finds its terminal window (see `HerdrTracker.windowHints`).
     private let windowHints = Mutex<[String: [String]]>([:])
+    /// The command that runs an agent kind. Tests swap in a script.
+    let agentCommand: @Sendable (AgentKind) -> String
 
     public init(
         client: HerdrClient, id: AdapterID = "herdr",
         capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing(),
-        watchesTerminal: Bool = false
+        watchesTerminal: Bool = false, agentCommand: @escaping @Sendable (AgentKind) -> String = HerdrAdapter.command(for:)
     ) {
         self.client = client
+        self.agentCommand = agentCommand
         self.id = id
         self.capabilities = capabilities
         self.timing = timing
@@ -250,46 +254,91 @@ public final class HerdrAdapter: AgentAdapter {
             }
 
         case .start(let kind, let cwd, let prompt):
-            let pane = try await start(kind: kind, cwd: cwd)
-            guard let prompt else { return }
-            // The agent stays either way: it's running, only the first message didn't arrive.
-            do {
-                try await translating(nil) {
-                    try await retrying(code: "agent_not_ready", for: timing.startRetryWindow) {
-                        try await client.send(.prompt(pane: pane, text: prompt))
-                    }
-                }
-            } catch {
-                throw AgentActionError.failed("Started \(Self.agentName(cwd.lastPathComponent)), but couldn't send it the message")
-            }
+            try await start(kind: kind, cwd: cwd, prompt: prompt)
         }
     }
 
-    /// Opens a workspace in `cwd` (without stealing focus) and starts the agent in its root pane.
-    /// Closes the pane again if the agent doesn't start. Returns the pane.
-    private func start(kind: AgentKind, cwd: URL) async throws -> String {
+    /// Starts the agent as the process of a new pane (nothing is typed into a shell, so shell
+    /// startup can't swallow the command), in a new tab of the workspace already open in `cwd`,
+    /// else of a new workspace there. The message goes along as an argument where the agent's
+    /// command takes one, so it waits through anything the agent asks first (Claude: trust this
+    /// folder?). When the agent exits, its pane closes.
+    private func start(kind: AgentKind, cwd: URL, prompt: String?) async throws {
+        struct Panes: Decodable, Sendable {
+            var panes: [Pane]
+            struct Pane: Decodable, Sendable { var workspace_id: String; var cwd: String?; var foreground_cwd: String? }
+        }
         struct Created: Decodable, Sendable {
+            var workspace: Workspace
             var root_pane: Pane
+            struct Workspace: Decodable, Sendable { var workspace_id: String }
             struct Pane: Decodable, Sendable { var pane_id: String }
         }
-        let label = cwd.lastPathComponent
-        let pane = try await translating(nil) {
-            try await client.call(.createWorkspace(cwd: cwd.path, label: label), as: Created.self).root_pane.pane_id
+        struct Applied: Decodable, Sendable {
+            var layout: Layout
+            struct Layout: Decodable, Sendable { var root: Root }
+            struct Root: Decodable, Sendable { var pane_id: String }
         }
+        let folder = Self.canonical(cwd.path)
+        let takesPrompt = kind == .claude || kind == .codex
+        let command = [agentCommand(kind)] + (takesPrompt ? [prompt].compactMap { $0 } : [])
+
+        let panes = try await translating(nil) { try await client.call(.listPanes, as: Panes.self).panes }
+        let open = panes.first { pane in [pane.cwd, pane.foreground_cwd].contains { $0.map(Self.canonical) == folder } }
+        let workspace: String
+        var shell: String?   // the new workspace's own shell pane, closed once the agent's tab is up
+        if let open {
+            workspace = open.workspace_id
+        } else {
+            let created = try await translating(nil) {
+                try await client.call(.createWorkspace(cwd: cwd.path, label: cwd.lastPathComponent), as: Created.self)
+            }
+            workspace = created.workspace.workspace_id
+            shell = created.root_pane.pane_id
+        }
+        let pane: String
+        do {
+            pane = try await translating(nil) {
+                try await client.call(.applyLayout(workspace: workspace, cwd: cwd.path, command: command,
+                                                   tabLabel: Self.tabLabel(prompt, kind: kind)), as: Applied.self).layout.root.pane_id
+            }
+        } catch {
+            if let shell { _ = try? await client.send(.closePane(shell)) }
+            throw error
+        }
+        if let shell { _ = try? await client.send(.closePane(shell)) }
+
+        guard let prompt, !takesPrompt else { return }
+        // The agent stays either way: it's running, only the first message didn't arrive.
         do {
             try await translating(nil) {
-                try await retrying(code: "agent_pane_busy", for: timing.startRetryWindow) {
-                    try await client.send(
-                        .startAgent(name: Self.agentName(label), kind: Self.herdrKind(kind), pane: pane, timeoutMs: 30_000),
-                        timeout: .seconds(35)
-                    )
+                try await retrying(code: "agent_not_ready", for: timing.startRetryWindow) {
+                    try await client.send(.prompt(pane: pane, text: prompt))
                 }
             }
         } catch {
-            _ = try? await client.send(.closePane(pane))
-            throw error
+            throw AgentActionError.failed("Started \(kind.displayName), but couldn't send it the message")
         }
-        return pane
+    }
+
+    /// A folder path as Herdr reports it (`/tmp` is `/private/tmp`).
+    static func canonical(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// The new tab's name: the start of the message, cut at a word, else the agent's name.
+    static func tabLabel(_ prompt: String?, kind: AgentKind, limit: Int = 24) -> String {
+        let words = (prompt ?? "").split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return kind.displayName }
+        var label = ""
+        for word in words {
+            let next = label.isEmpty ? String(word) : label + " " + word
+            if next.count > limit {
+                return (label.isEmpty ? String(next.prefix(limit - 1)) : label) + "…"
+            }
+            label = next
+        }
+        return label
     }
 
     private func check(_ ref: AgentRef) throws {
@@ -321,14 +370,8 @@ public final class HerdrAdapter: AgentAdapter {
         }
     }
 
-    /// Herdr agent names match `[a-z][a-z0-9_-]{0,31}`.
-    static func agentName(_ label: String) -> String {
-        var name = String(label.lowercased().map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") ? $0 : "-" })
-        while let first = name.first, !(first.isASCII && first.isLetter) { name.removeFirst() }
-        return name.isEmpty ? "agent" : String(name.prefix(32))
-    }
-
-    static func herdrKind(_ kind: AgentKind) -> String {
+    /// The command that runs `kind`.
+    public static func command(for kind: AgentKind) -> String {
         switch kind {
         case .claude: "claude"
         case .codex: "codex"

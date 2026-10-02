@@ -170,6 +170,77 @@ struct HerdrIntegrationTests {
     }
 }
 
+extension HerdrIntegrationTests {
+    private struct PaneList: Decodable, Sendable {
+        var panes: [Pane]
+        struct Pane: Decodable, Sendable { var pane_id: String; var workspace_id: String; var cwd: String? }
+    }
+    private struct WorkspaceList: Decodable, Sendable {
+        var workspaces: [Workspace]
+        struct Workspace: Decodable, Sendable { var workspace_id: String; var label: String?; var pane_count: Int }
+    }
+    private struct Read: Decodable, Sendable { var read: Text; struct Text: Decodable, Sendable { var text: String } }
+
+    /// New agents run as the pane's process (a script standing in for `claude`, so no real agent
+    /// starts): a new tab in the workspace already open in the folder, else a new workspace with
+    /// only the agent's tab. The message arrives as one argument, exactly.
+    @Test func startsAgentsInTheirFoldersWorkspace() async throws {
+        try await withHerdr { herdr in
+            let base = HerdrAdapter.canonical(herdr.directory.path)
+            let fake = herdr.directory.appending(path: "fake-agent")
+            try "#!/bin/sh\nfor a in \"$@\"; do printf '[%s]\\n' \"$a\"; done\nsleep 60\n".write(to: fake, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
+            let open = herdr.directory.appending(path: "open"), fresh = herdr.directory.appending(path: "fresh")
+            for folder in [open, fresh] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+            struct Created: Decodable, Sendable { var workspace: W; struct W: Decodable, Sendable { var workspace_id: String } }
+            let existing = try await herdr.driver.call(.createWorkspace(cwd: open.path, label: "open"), as: Created.self).workspace.workspace_id
+
+            let adapter = HerdrAdapter(client: herdr.client, timing: .test, agentCommand: { _ in fake.path })
+            let message = #"it's "quoted"  and $HOME"#
+            try await adapter.perform(.start(kind: .claude, cwd: open, prompt: message))
+            try await adapter.perform(.start(kind: .claude, cwd: open, prompt: "again"))   // no name to clash
+            try await adapter.perform(.start(kind: .claude, cwd: fresh, prompt: "Book me an apartment in New York for a week"))
+
+            let panes = try await herdr.driver.call(.listPanes, as: PaneList.self).panes
+            let workspaces = try await herdr.driver.call(HerdrRequest(method: "workspace.list", params: [:]), as: WorkspaceList.self).workspaces
+            #expect(workspaces.count == 2)
+            #expect(panes.filter { $0.workspace_id == existing }.count == 3, "the open workspace: its shell and two agent tabs")
+            let created = try #require(workspaces.first { $0.workspace_id != existing })
+            #expect(created.label == "fresh")
+            #expect(created.pane_count == 1, "only the agent's tab")
+            #expect(panes.first { $0.workspace_id == created.workspace_id }?.cwd.map(HerdrAdapter.canonical) == base + "/fresh")
+
+            let tabs = try await herdr.driver.snapshot().tabs.compactMap(\.label)
+            #expect(tabs.contains(HerdrAdapter.tabLabel(message, kind: .claude)))
+            #expect(tabs.contains("again"))
+            #expect(tabs.contains("Book me an apartment in…"))
+
+            // The first agent in the open workspace got the message as one argument, untouched.
+            let agentPanes = panes.filter { $0.workspace_id == existing }.map(\.pane_id).sorted()
+            var output = ""
+            let deadline = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < deadline {
+                let reads = try await agentPanes.asyncMap { pane in
+                    try await herdr.driver.call(HerdrRequest(method: "pane.read", params: ["pane_id": .string(pane), "source": "recent"]),
+                                                as: Read.self).read.text
+                }
+                output = reads.joined(separator: "\n")
+                if output.contains("[again]") && output.contains("$HOME") { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            #expect(output.contains("[\(message)]"), "\(output)")
+        }
+    }
+}
+
+extension Sequence {
+    func asyncMap<T>(_ transform: (Element) async throws -> T) async rethrows -> [T] {
+        var results: [T] = []
+        for element in self { results.append(try await transform(element)) }
+        return results
+    }
+}
+
 @Suite(.enabled(if: herdrInstalled, "needs herdr on PATH"))
 struct HerdrSchemaDriftTests {
     @Test func installedHerdrSpeaksOurProtocol() throws {

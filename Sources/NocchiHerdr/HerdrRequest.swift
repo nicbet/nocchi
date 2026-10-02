@@ -75,9 +75,15 @@ public struct HerdrRequest: Hashable, Sendable {
         HerdrRequest(method: "workspace.create", params: ["cwd": .string(cwd), "label": .string(label), "focus": false])
     }
 
-    public static func startAgent(name: String, kind: String, pane: String, timeoutMs: Int) -> HerdrRequest {
-        HerdrRequest(method: "agent.start", params: [
-            "name": .string(name), "kind": .string(kind), "pane_id": .string(pane), "timeout_ms": .int(timeoutMs),
+    /// Every pane, with its folder: finds a workspace already open in a folder.
+    public static let listPanes = HerdrRequest(method: "pane.list", params: [:])
+
+    /// A new tab in `workspace` whose one pane runs `command` in `cwd` (no shell: nothing is
+    /// typed). Doesn't take focus.
+    public static func applyLayout(workspace: String, cwd: String, command: [String], tabLabel: String) -> HerdrRequest {
+        HerdrRequest(method: "layout.apply", params: [
+            "workspace_id": .string(workspace), "focus": false, "tab_label": .string(tabLabel),
+            "root": ["type": "pane", "cwd": .string(cwd), "command": .array(command.map(JSONValue.string))],
         ])
     }
 
@@ -89,7 +95,8 @@ public struct HerdrRequest: Hashable, Sendable {
     public static var all: [HerdrRequest] {
         [
             ping, snapshot, subscribe(agentPanes: ["w1:p1"]), focus(pane: "w1:p1"), prompt(pane: "w1:p1", text: "hi"),
-            createWorkspace(cwd: "/tmp", label: "tmp"), startAgent(name: "tmp", kind: "claude", pane: "w1:p1", timeoutMs: 30_000),
+            createWorkspace(cwd: "/tmp", label: "tmp"), listPanes,
+            applyLayout(workspace: "w1", cwd: "/tmp", command: ["claude", "hi"], tabLabel: "hi"),
             closePane("w1:p1"),
         ]
     }
