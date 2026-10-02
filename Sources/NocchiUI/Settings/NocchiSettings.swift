@@ -57,6 +57,15 @@ public final class NocchiSettings {
         didSet { defaults.set(herdrSocketPath, forKey: Keys.herdrSocketPath) }
     }
 
+    /// Folders new chats started in, most recent first.
+    public var recentChatFolders: [String] {
+        didSet { defaults.set(recentChatFolders, forKey: Keys.recentChatFolders) }
+    }
+
+    func rememberChatFolder(_ folder: URL) {
+        recentChatFolders = Array(([folder.path] + recentChatFolders.filter { $0 != folder.path }).prefix(5))
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         ignoresReduceMotion = defaults.bool(forKey: Keys.ignoresReduceMotion)
@@ -70,6 +79,7 @@ public final class NocchiSettings {
         watchesClaude = defaults.object(forKey: Keys.watchesClaude) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
+        recentChatFolders = defaults.stringArray(forKey: Keys.recentChatFolders) ?? []
     }
 
     private enum Keys {
@@ -83,6 +93,7 @@ public final class NocchiSettings {
         static let watchesClaude = "watchesClaude"
         static let herdrSession = "herdrSession"
         static let herdrSocketPath = "herdrSocketPath"
+        static let recentChatFolders = "recentChatFolders"
     }
 }
 

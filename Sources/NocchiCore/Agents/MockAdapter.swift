@@ -48,9 +48,14 @@ public actor MockAdapter: AgentAdapter {
         case .prompt(let ref, let text):
             guard agents[ref.localID] != nil, ref.adapter == id else { throw AgentActionError.unknownAgent(ref) }
             update(ref.localID) { $0.status = .working; $0.title = String(text.prefix(60)) }
-        case .start(let kind, let cwd):
+        case .start(let kind, let cwd, let prompt):
             let key = "started-\(order.count + 1)"
-            add(MockAgent(key, kind: kind, name: cwd.lastPathComponent, status: .starting).info(adapter: id, at: Date()))
+            var info = MockAgent(key, kind: kind, name: cwd.lastPathComponent, status: .starting).info(adapter: id, at: Date())
+            if let prompt {
+                info.status = .working
+                info.title = String(prompt.prefix(60))
+            }
+            add(info)
         }
     }
 

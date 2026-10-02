@@ -41,8 +41,25 @@ public enum NotchSnapshot {
         do {
             let store = previewStore(.showcase)
             let model = NotchModel(geometry: geometry, store: store)
-            if let primary = store.primary { model.prompt = .composing(primary.ref) }
+            if let primary = store.primary { model.prompt = .composing(.agent(primary.ref)) }
             urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-prompt.png")))
+        }
+        // The top bar beside a laptop's notch, and a new chat (a draft, the folder it starts in).
+        do {
+            let laptop = NotchGeometry.make(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
+                                            topLeftArea: CGRect(x: 0, y: 0, width: 663, height: 32),
+                                            topRightArea: CGRect(x: 0, y: 0, width: 663, height: 32), menuBarHeight: 32)
+            let store = previewStore(.showcase)
+            store.apply(.connection(.connected(version: "0.9.3")), from: "herdr")
+            store.apply(.connection(.unavailable(reason: "off")), from: "claude")
+            let model = NotchModel(geometry: laptop, store: store)
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-topbar.png")))
+            model.newChatFolder = URL(fileURLWithPath: "/Users/me/Projects/nocchi")
+            model.newChatDraft = "Book me an apartment in New York for the last week of September"
+            model.prompt = .composing(.newAgent)
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-newchat.png")))
+            model.prompt = .failed(.newAgent, message: "Herdr error agent_pane_busy: pane is busy")
+            urls.append(try render(model, mode: .expanded, scale: scale, to: directory.appendingPathComponent("notch-newchat-failed.png")))
         }
         // An idle primary shows its task instead of its last tool call.
         do {

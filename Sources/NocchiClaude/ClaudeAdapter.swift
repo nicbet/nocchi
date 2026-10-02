@@ -10,7 +10,8 @@ import Synchronization
 /// through `ClaudeActivityFeed`). Sessions inside Herdr panes are left to the Herdr adapter.
 public final class ClaudeAdapter: AgentAdapter {
     public let id: AdapterID = "claude"
-    public let capabilities: AdapterCapabilities = [.focus, .errors]
+    /// `.start` opens a terminal tab running `claude`; the registry then reports the session.
+    public let capabilities: AdapterCapabilities = [.focus, .start, .errors]
 
     private let registry: URL
     private let pollInterval: Duration
@@ -103,7 +104,14 @@ public final class ClaudeAdapter: AgentAdapter {
             guard let app = opened, await TerminalApps.bringToFront(app, raising: hints) else {
                 throw AgentActionError.failed("Couldn't bring the terminal forward")
             }
-        case .prompt, .start:
+        case .start(let kind, let cwd, let prompt):
+            guard kind == .claude else { throw AgentActionError.unsupported(action) }
+            do {
+                try await TerminalLauncher.run(["claude"] + (prompt.map { [$0] } ?? []), in: cwd)
+            } catch {
+                throw AgentActionError.failed("\(error)")
+            }
+        case .prompt:
             throw AgentActionError.unsupported(action)
         }
     }

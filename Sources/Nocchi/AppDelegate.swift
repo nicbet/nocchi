@@ -29,6 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         notch.start()
         self.notch = notch
         statusItem = makeStatusItem()
+        // The notch's gear shows the same menu, at the pointer.
+        notch.model.onOpenSettings = { [weak self] in
+            guard let menu = self?.statusItem?.menu else { return }
+            menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

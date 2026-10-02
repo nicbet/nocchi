@@ -42,7 +42,7 @@ public final class NotchModel {
     public var banner: PeekBanner?
     /// Opened by a peek rather than the pointer: opens without the playful bounce.
     public var isPeeking = false
-    /// Writing a message to an agent from the notch.
+    /// Writing a message to an agent, or to a new one, from the notch.
     public var prompt: PromptState = .none {
         didSet {
             guard prompt != oldValue else { return }
@@ -58,25 +58,76 @@ public final class NotchModel {
     /// Called with the folder when one is dropped on the notch.
     @ObservationIgnored var onDropFolder: ((URL) -> Void)?
 
-    /// Stay open regardless of hover.
-    var holdsOpen: Bool { isPinned || drop != .none || prompt != .none }
+    /// The new chat's message, kept when the field closes so a stray click doesn't lose it.
+    var newChatDraft = ""
+    /// Where the new chat's agent starts; nil until a chat opens (then `defaultChatFolder`).
+    public var newChatFolder: URL?
+    /// The folder picker is up: the panel isn't key meanwhile, but the chat stays open.
+    var isChoosingFolder = false
+    @ObservationIgnored var onChooseFolder: (() -> Void)?
+    /// Shows the settings menu (the status item's) at the pointer.
+    @ObservationIgnored public var onOpenSettings: (() -> Void)?
 
-    /// Sends `text` to the agent being written to. On failure the message stays a few seconds.
+    /// Stay open regardless of hover.
+    var holdsOpen: Bool { isPinned || drop != .none || prompt != .none || isChoosingFolder }
+
+    /// Opens the field that starts a new agent.
+    func startNewChat() {
+        if newChatFolder == nil { newChatFolder = defaultChatFolder }
+        prompt = .composing(.newAgent)
+    }
+
+    /// The last folder a chat started in, else the primary agent's, else home.
+    var defaultChatFolder: URL {
+        let fileManager = FileManager.default
+        if let last = NocchiSettings.shared.recentChatFolders.first, fileManager.fileExists(atPath: last) {
+            return URL(fileURLWithPath: last)
+        }
+        return store.primary?.info.cwd ?? fileManager.homeDirectoryForCurrentUser
+    }
+
+    /// Folders to offer for a new chat: the chosen one, recent ones, then the agents' folders.
+    var chatFolders: [URL] {
+        let agents = store.state.agents.values.sorted { $0.info.changedAt > $1.info.changedAt }.compactMap(\.info.cwd)
+        let candidates = [newChatFolder].compactMap { $0 }
+            + NocchiSettings.shared.recentChatFolders.map { URL(fileURLWithPath: $0) } + agents
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0.standardizedFileURL.path).inserted }.prefix(8).map { $0 }
+    }
+
+    /// Sends `text` to the agent being written to, or starts a new agent with it. On failure the
+    /// message stays a few seconds.
     func sendPrompt(_ text: String) {
-        guard case .composing(let ref) = prompt else { return }
+        guard case .composing(let target) = prompt else { return }
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        prompt = .sending(ref)
+        let action: AgentAction
+        switch target {
+        case .agent(let ref):
+            action = .prompt(ref, text)
+        case .newAgent:
+            let folder = newChatFolder ?? defaultChatFolder
+            action = .start(kind: .claude, cwd: folder, prompt: text)
+        }
+        prompt = .sending(target)
         Task {
             do {
-                try await store.perform(.prompt(ref, text))
-                if prompt == .sending(ref) { prompt = .none }
+                try await store.perform(action)
+                if case .start(_, let folder, _) = action {
+                    NocchiSettings.shared.rememberChatFolder(folder)
+                    newChatDraft = ""
+                }
+                if prompt == .sending(target) { prompt = .none }
             } catch {
-                let message = if case AgentActionError.failed(let why) = error { why } else { "\(error)" }
-                guard prompt == .sending(ref) else { return }
-                prompt = .failed(ref, message: message)
+                let message = switch error {
+                case AgentActionError.failed(let why): why
+                case AgentActionError.unsupported: "Turn on Herdr or Claude Code under Sources to start agents."
+                default: "\(error)"
+                }
+                guard prompt == .sending(target) else { return }
+                prompt = .failed(target, message: message)
                 try? await Task.sleep(for: .seconds(4))
-                if prompt == .failed(ref, message: message) { prompt = .composing(ref) }
+                if prompt == .failed(target, message: message) { prompt = .composing(target) }
             }
         }
     }
@@ -163,17 +214,24 @@ public enum DropState: Equatable, Sendable {
     }
 }
 
+/// Who a message goes to.
+public enum ComposeTarget: Hashable, Sendable {
+    case agent(AgentRef)
+    /// Starts a new agent with the message.
+    case newAgent
+}
+
 public enum PromptState: Equatable, Sendable {
     case none
-    case composing(AgentRef)
-    case sending(AgentRef)
-    case failed(AgentRef, message: String)
+    case composing(ComposeTarget)
+    case sending(ComposeTarget)
+    case failed(ComposeTarget, message: String)
 
-    /// The agent being written to.
-    var target: AgentRef? {
+    /// Who is being written to.
+    var target: ComposeTarget? {
         switch self {
         case .none: nil
-        case .composing(let ref), .sending(let ref), .failed(let ref, _): ref
+        case .composing(let target), .sending(let target), .failed(let target, _): target
         }
     }
 }

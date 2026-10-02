@@ -133,7 +133,8 @@ public enum AgentAction: Hashable, Sendable {
     /// Focus the agent and bring the app it runs in to the front.
     case open(AgentRef)
     case prompt(AgentRef, String)
-    case start(kind: AgentKind, cwd: URL)
+    /// Starts an agent in `cwd`, and gives it `prompt` as its first message when there is one.
+    case start(kind: AgentKind, cwd: URL, prompt: String? = nil)
 
     public var requiredCapability: AdapterCapabilities {
         switch self {

@@ -1,26 +1,35 @@
 import NocchiCore
 import SwiftUI
 
-/// Writing to an agent, across the whole expanded notch: Return sends, Shift-Return starts a new
-/// line, Escape closes. Grows out of the focus card.
+/// Writing to an agent, or starting a new one with a message, across the whole expanded notch:
+/// Return sends, Shift-Return starts a new line, Escape closes. Grows out of the focus card.
 struct Composer: View {
     let model: NotchModel
-    let entry: AgentEntry
+    let target: ComposeTarget
+    /// The agent written to; nil for a new chat.
+    let entry: AgentEntry?
     /// Shared with the focus card, whose background grows into this one.
     let card: Namespace.ID
-    @State private var text = ""
+    @State private var agentText = ""
     /// The contents fade in once the card has mostly grown.
     @State private var shown = false
     @FocusState private var focused: Bool
 
+    /// A new chat keeps its draft in the model, so closing the field doesn't lose it.
+    private var text: Binding<String> {
+        entry == nil ? Binding { model.newChatDraft } set: { model.newChatDraft = $0 } : $agentText
+    }
+
     var body: some View {
-        let sending = model.prompt == .sending(entry.ref)
-        let mood = model.store.mood(of: entry)
+        let sending = model.prompt == .sending(target)
+        let mood = entry.map(model.store.mood(of:)) ?? .idle
+        let isEmpty = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                FaceView(mood: mood, size: 30, seed: entry.faceSeed)
+                FaceView(mood: sending && entry == nil ? .working : mood, size: 30, seed: entry?.faceSeed ?? 0.37)
                     .frame(width: 34, height: 34)
-                TextField("Ask \(entry.info.displayName) something…", text: $text, axis: .vertical)
+                TextField(entry.map { "Ask \($0.info.displayName) something…" } ?? "What should a new agent do?",
+                          text: text, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
                     .lineLimit(1...3)
@@ -29,9 +38,9 @@ struct Composer: View {
                     .padding(.top, 7)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) {
-                            text.append("\n")
+                            text.wrappedValue.append("\n")
                         } else {
-                            model.sendPrompt(text)
+                            model.sendPrompt(text.wrappedValue)
                         }
                         return .handled
                     }
@@ -39,25 +48,34 @@ struct Composer: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 10) {
-                ContextChip(entry: entry)
+                if let entry {
+                    ContextChip(entry: entry)
+                } else {
+                    FolderPicker(model: model)
+                        .disabled(sending)
+                }
                 Spacer(minLength: 8)
                 if case .failed(_, let message) = model.prompt {
                     Text(message)
                         .font(.system(size: 11))
                         .foregroundStyle(FacePalette.body(for: .error).lighter(0.2).color)
                         .lineLimit(1)
+                } else if sending, entry == nil {
+                    Text("Starting an agent…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 Button {
-                    model.sendPrompt(text)
+                    model.sendPrompt(text.wrappedValue)
                 } label: {
                     Image(systemName: sending ? "ellipsis" : "arrow.up")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(text.isEmpty ? .white.opacity(0.35) : .black)
+                        .foregroundStyle(isEmpty ? .white.opacity(0.35) : .black)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(text.isEmpty ? .white.opacity(0.1) : .white))
+                        .background(Circle().fill(isEmpty ? .white.opacity(0.1) : .white))
                 }
                 .buttonStyle(PressScale())
-                .disabled(text.isEmpty || sending)
+                .disabled(isEmpty || sending)
             }
         }
         .padding(16)
@@ -77,6 +95,47 @@ struct Composer: View {
             try? await Task.sleep(for: .milliseconds(60))
             focused = true
         }
+    }
+}
+
+/// Where a new chat's agent starts: recent folders and the agents' folders, or any other.
+private struct FolderPicker: View {
+    let model: NotchModel
+
+    var body: some View {
+        Menu {
+            ForEach(model.chatFolders, id: \.self) { folder in
+                Button(Self.abbreviated(folder)) { model.newChatFolder = folder }
+            }
+            Divider()
+            Button("Choose…") { model.onChooseFolder?() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "folder")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(model.newChatFolder.map(Self.abbreviated) ?? "~")
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .opacity(0.7)
+            }
+            .foregroundStyle(.white.opacity(0.75))
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(Capsule().fill(.white.opacity(0.1)))
+            .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Where the new agent works")
+    }
+
+    static func abbreviated(_ folder: URL) -> String {
+        (folder.path as NSString).abbreviatingWithTildeInPath
     }
 }
 

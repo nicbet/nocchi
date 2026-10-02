@@ -17,13 +17,18 @@ struct OverviewView: View {
         let alert = model.prompt != .none ? nil : store.primary.flatMap { entry in
             Self.alertMoods.contains(store.mood(of: entry)) ? entry : nil
         }
+        let composing: (target: ComposeTarget, entry: AgentEntry?)? = switch model.prompt.target {
+        case .agent(let ref)?: store.state.agents[ref].map { (.agent(ref), $0) }
+        case .newAgent?: (.newAgent, nil)
+        case nil: nil
+        }
         VStack(spacing: 0) {
-            Color.clear.frame(height: model.geometry.notchSize.height)
+            TopBar(model: model)
             Group {
-                if let target = model.prompt.target, let entry = store.state.agents[target] {
+                if let composing {
                     // Removal must take time: the focus card shrinks back from the composer's
                     // frame only while the composer is still there.
-                    Composer(model: model, entry: entry, card: card)
+                    Composer(model: model, target: composing.target, entry: composing.entry, card: card)
                         .transition(.asymmetric(insertion: .identity, removal: .opacity))
                 } else if let alert {
                     AlertView(store: store, entry: alert, mood: store.mood(of: alert))
@@ -64,6 +69,122 @@ extension OverviewView {
         gutter + FocusCard.padding + FocusCard.faceFrame / 2 - bodyWidth / 2
     }
     static var focusFaceSize: CGFloat { FocusCard.faceSize }
+}
+
+/// The strip beside the notch: Home and a new chat on the left; the agent sources and settings on
+/// the right. The middle stays clear for the camera housing.
+private struct TopBar: View {
+    let model: NotchModel
+
+    var body: some View {
+        let notch = model.geometry.notchSize
+        let newChat = model.prompt.target == .newAgent
+        HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                TabButton(symbol: "house.fill", isSelected: !newChat, help: "Home") {
+                    if model.prompt != .none { model.prompt = .none }
+                }
+                TabButton(symbol: "text.bubble.fill", isSelected: newChat, help: "Start a new agent") {
+                    if !newChat { model.startNewChat() }
+                }
+                .disabled(!model.store.canStartAgents)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Color.clear.frame(width: notch.width)
+            HStack(spacing: 12) {
+                SourceBadges(store: model.store)
+                Button {
+                    model.onOpenSettings?()
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressScale())
+                .help("Settings")
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, OverviewView.gutter)
+        .frame(height: notch.height)
+    }
+}
+
+/// An icon tab: a dark pill when selected, a dim icon otherwise.
+private struct TabButton: View {
+    let symbol: String
+    let isSelected: Bool
+    let help: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(isSelected ? 0.95 : isEnabled ? 0.5 : 0.25))
+                .frame(width: 38, height: 24)
+                .background(Capsule().fill(.white.opacity(isSelected ? 0.14 : 0)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressScale())
+        .help(help)
+        .animation(.spring(duration: 0.3, bounce: 0.15), value: isSelected)
+    }
+}
+
+/// One glyph per agent source, with a dot for its connection: green connected, amber connecting,
+/// red unavailable.
+private struct SourceBadges: View {
+    let store: AgentStore
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(store.state.connections.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { id in
+                let state = store.state.connections[id]
+                let (symbol, name) = Self.describe(id)
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 20, height: 20)
+                    .overlay(alignment: .bottomTrailing) {
+                        Circle()
+                            .fill(Self.color(state))
+                            .frame(width: 6, height: 6)
+                            .overlay(Circle().stroke(.black, lineWidth: 1.5))
+                            .offset(x: 2, y: 1)
+                    }
+                    .help(Self.help(name, state))
+            }
+        }
+    }
+
+    static func describe(_ id: AdapterID) -> (symbol: String, name: String) {
+        switch id.rawValue {
+        case "herdr": ("square.split.2x1.fill", "Herdr")
+        case "claude": ("asterisk", "Claude Code")
+        case "mock": ("theatermasks.fill", "Demo")
+        default: ("circle.dashed", id.rawValue)
+        }
+    }
+
+    static func color(_ state: ConnectionState?) -> Color {
+        switch state {
+        case .connected: Color(red: 0.3, green: 0.82, blue: 0.45)
+        case .connecting, nil: Color(red: 0.98, green: 0.72, blue: 0.25)
+        case .unavailable: Color(red: 0.95, green: 0.35, blue: 0.32)
+        }
+    }
+
+    static func help(_ name: String, _ state: ConnectionState?) -> String {
+        switch state {
+        case .connected(let version): [name, version].compactMap { $0 }.joined(separator: " ") + ": connected"
+        case .connecting, nil: "\(name): connecting…"
+        case .unavailable(let reason): "\(name): \(reason)"
+        }
+    }
 }
 
 /// The primary agent (or the one being written to): big face with a glow in its mood color, and

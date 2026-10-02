@@ -50,6 +50,7 @@ public final class NotchController {
         observeMoods()
         model.onDropFolder = { [weak self] url in self?.startAgent(in: url) }
         model.onPromptChange = { [weak self] state in self?.promptChanged(state) }
+        model.onChooseFolder = { [weak self] in self?.chooseFolder() }
         // A file drag can't be seen directly from outside the dragging app, so on every press we
         // watch the drag pasteboard until the button is released.
         mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
@@ -62,7 +63,7 @@ public final class NotchController {
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { $0.screensChanged() }
         // Clicking elsewhere while writing to an agent closes the field.
         observe(NotificationCenter.default, NSWindow.didResignKeyNotification, object: panel) { controller in
-            if case .composing = controller.model.prompt { controller.model.prompt = .none }
+            if case .composing = controller.model.prompt, !controller.model.isChoosingFolder { controller.model.prompt = .none }
         }
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.model.screensAsleep = true }
@@ -196,6 +197,32 @@ public final class NotchController {
             scheduleModeChange()
         case .sending, .failed:
             break
+        }
+    }
+
+    /// Picks the new chat's folder in an open panel; the chat stays open meanwhile.
+    private func chooseFolder() {
+        let picker = NSOpenPanel()
+        picker.canChooseDirectories = true
+        picker.canChooseFiles = false
+        picker.canCreateDirectories = true
+        picker.prompt = "Start Here"
+        picker.message = "Where should the new agent work?"
+        picker.directoryURL = model.newChatFolder
+        model.isChoosingFolder = true
+        // An accessory app's panel only takes keyboard input while the app is active.
+        NSApp.activate()
+        picker.begin { [weak self] response in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if response == .OK, let url = picker.url { self.model.newChatFolder = url }
+                self.model.isChoosingFolder = false
+                if case .composing = self.model.prompt {
+                    self.panel.makeKey()
+                } else {
+                    self.scheduleModeChange()
+                }
+            }
         }
     }
 

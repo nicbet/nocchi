@@ -249,14 +249,25 @@ public final class HerdrAdapter: AgentAdapter {
                 }
             }
 
-        case .start(let kind, let cwd):
-            try await start(kind: kind, cwd: cwd)
+        case .start(let kind, let cwd, let prompt):
+            let pane = try await start(kind: kind, cwd: cwd)
+            guard let prompt else { return }
+            // The agent stays either way: it's running, only the first message didn't arrive.
+            do {
+                try await translating(nil) {
+                    try await retrying(code: "agent_not_ready", for: timing.startRetryWindow) {
+                        try await client.send(.prompt(pane: pane, text: prompt))
+                    }
+                }
+            } catch {
+                throw AgentActionError.failed("Started \(Self.agentName(cwd.lastPathComponent)), but couldn't send it the message")
+            }
         }
     }
 
     /// Opens a workspace in `cwd` (without stealing focus) and starts the agent in its root pane.
-    /// Closes the pane again if the agent doesn't start.
-    private func start(kind: AgentKind, cwd: URL) async throws {
+    /// Closes the pane again if the agent doesn't start. Returns the pane.
+    private func start(kind: AgentKind, cwd: URL) async throws -> String {
         struct Created: Decodable, Sendable {
             var root_pane: Pane
             struct Pane: Decodable, Sendable { var pane_id: String }
@@ -278,6 +289,7 @@ public final class HerdrAdapter: AgentAdapter {
             _ = try? await client.send(.closePane(pane))
             throw error
         }
+        return pane
     }
 
     private func check(_ ref: AgentRef) throws {

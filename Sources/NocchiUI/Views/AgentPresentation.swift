@@ -135,7 +135,7 @@ extension NotchModel {
         let mood = store.mood(of: entry)
         let capabilities = store.capabilities(of: entry.ref)
         if (mood == .idle || mood == .sleep), capabilities.contains(.prompt) {
-            prompt = .composing(entry.ref)
+            prompt = .composing(.agent(entry.ref))
         } else if capabilities.contains(.focus) {
             let store = store
             Task { try? await store.perform(.open(entry.ref)) }

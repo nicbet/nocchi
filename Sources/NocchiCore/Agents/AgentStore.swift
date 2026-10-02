@@ -65,7 +65,7 @@ public final class AgentStore {
     public func perform(_ action: AgentAction) async throws {
         let adapterID: AdapterID = switch action {
         case .focus(let ref), .open(let ref), .prompt(let ref, _): ref.adapter
-        case .start: runs.first { $0.value.adapter.capabilities.contains(.start) }?.key ?? "none"
+        case .start: starter ?? "none"
         }
         guard let adapter = runs[adapterID]?.adapter else { throw AgentActionError.failed("No adapter \(adapterID)") }
         try await adapter.perform(action)
@@ -74,8 +74,19 @@ public final class AgentStore {
     public func isRunning(_ id: AdapterID) -> Bool { runs[id] != nil }
 
     /// Whether any running adapter can start new agents.
-    public var canStartAgents: Bool {
-        runs.values.contains { $0.adapter.capabilities.contains(.start) }
+    public var canStartAgents: Bool { starter != nil }
+
+    /// Who owns a new agent: a connected adapter before one that isn't, then one nocchi can keep
+    /// talking to (Herdr) before one that only launches it (Claude Code, in a terminal tab).
+    var starter: AdapterID? {
+        runs.filter { $0.value.adapter.capabilities.contains(.start) }
+            .map { (id: $0.key, capabilities: $0.value.adapter.capabilities) }
+            .min { rank($0) < rank($1) || (rank($0) == rank($1) && $0.id.rawValue < $1.id.rawValue) }?.id
+    }
+
+    private func rank(_ candidate: (id: AdapterID, capabilities: AdapterCapabilities)) -> Int {
+        let connected = if case .connected = state.connections[candidate.id] { true } else { false }
+        return (connected ? 0 : 2) + (candidate.capabilities.contains(.prompt) ? 0 : 1)
     }
 
     public func capabilities(of ref: AgentRef) -> AdapterCapabilities {
