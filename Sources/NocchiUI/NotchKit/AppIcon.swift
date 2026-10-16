@@ -1,5 +1,6 @@
 import AppKit
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Nocchi's app icon: the face waving hello, as in the launch greeting, with a warm glow and gold

@@ -1,13 +1,12 @@
-import AppKit
 import NocchiCore
 import SwiftUI
 
 /// Debug view: every mood at several sizes and colors, plus one big face to watch transitions.
 public struct MoodGallery: View {
     /// Sizes the faces appear at: gallery, expanded card, expanded cluster, collapsed primary, collapsed cluster.
-    static let sizes: [(label: String, points: CGFloat)] = [("large", 64), ("card", 40), ("chip", 30), ("notch", 18), ("cluster", 10)]
+    public static let sizes: [(label: String, points: CGFloat)] = [("large", 64), ("card", 40), ("chip", 30), ("notch", 18), ("cluster", 10)]
 
-    static func colorName(_ mood: Mood) -> String {
+    public static func colorName(_ mood: Mood) -> String {
         switch mood {
         case .idle: "white"
         case .thinking: "purple"
@@ -73,33 +72,5 @@ public struct MoodGallery: View {
             let all = Mood.allCases
             mood = all[(all.firstIndex(of: mood)! + 1) % all.count]
         }
-    }
-}
-
-/// Window hosting the gallery. Faces follow the pointer inside it.
-@MainActor
-public final class MoodGalleryWindow {
-    private var window: NSWindow?
-
-    public init() {}
-
-    public func show() {
-        if window == nil {
-            let window = NSWindow(
-                contentRect: CGRect(x: 0, y: 0, width: 760, height: 900),
-                styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                backing: .buffered, defer: false
-            )
-            window.title = "nocchi — Mood Gallery"
-            window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: MoodGallery().resolvesReduceMotion())
-            window.center()
-            self.window = window
-        }
-        // nocchi is a background (accessory) app, so plain activation can leave the window
-        // behind the frontmost app's windows. Order it front regardless, then make it key.
-        window?.orderFrontRegardless()
-        window?.makeKey()
-        NSApp.activate()
     }
 }

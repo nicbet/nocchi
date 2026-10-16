@@ -3,11 +3,11 @@ import CoreGraphics
 /// Draws one face with Core Graphics, in a y-down context whose size is the canvas (larger than
 /// the face, see `FaceView.canvasScale`, so the ring, badge and sparkles have room).
 /// Used by the live `FaceNSView` and, through `Canvas.withCGContext`, by still frames and snapshots.
-enum FaceRenderer {
+public enum FaceRenderer {
     /// Faces smaller than this don't breathe: sub-point scaling only shimmers.
-    static let minimumBreathingSize: CGFloat = 32
+    public static let minimumBreathingSize: CGFloat = 32
 
-    static func draw(
+    public static func draw(
         in cg: CGContext,
         canvas: CGSize,
         size s: CGFloat,
@@ -68,7 +68,7 @@ enum FaceRenderer {
     }
 
     /// How far the eyes travel at full gaze, in points.
-    static func eyeTravel(size s: CGFloat) -> CGFloat { 0.07 * s }
+    public static func eyeTravel(size s: CGFloat) -> CGFloat { 0.07 * s }
 
     private static func drawEyes(_ cg: CGContext, s: CGFloat, p: FaceParams, gaze: CGVector) {
         let travel = eyeTravel(size: s)

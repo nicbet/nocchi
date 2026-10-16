@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Expanded while a folder is dragged near the notch, and while the agent it starts comes up:

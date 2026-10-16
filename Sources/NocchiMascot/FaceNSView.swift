@@ -4,7 +4,7 @@ import NocchiCore
 /// A live face drawn with Core Graphics, driven by its own display link. This keeps per-frame
 /// work out of SwiftUI: a `TimelineView` tick re-lays out the whole hosting view, this only
 /// redraws one small layer, and only when the picture actually changed.
-final class FaceNSView: NSView {
+public final class FaceNSView: NSView {
     private var motion: FaceMotion
     private var size: CGFloat
     private var seed: Double
@@ -22,7 +22,7 @@ final class FaceNSView: NSView {
         var t: Double
     }
 
-    init(mood: Mood, size: CGFloat, seed: Double) {
+    public init(mood: Mood, size: CGFloat, seed: Double = 0) {
         motion = FaceMotion(mood: mood)
         self.size = size
         self.seed = seed
@@ -32,13 +32,13 @@ final class FaceNSView: NSView {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override var isFlipped: Bool { true }
-    override var isOpaque: Bool { false }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    public override var isFlipped: Bool { true }
+    public override var isOpaque: Bool { false }
+    public override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func configure(mood: Mood, size: CGFloat, seed: Double, frameRate: Double, paused: Bool, reduceMotion: Bool) {
+    public func configure(mood: Mood, size: CGFloat, seed: Double = 0, frameRate: Double = 30, paused: Bool = false, reduceMotion: Bool = false) {
         let appearanceChanged = size != self.size || seed != self.seed || reduceMotion != self.reduceMotion
         motion.setMood(mood, at: CACurrentMediaTime())
         self.size = size
@@ -54,7 +54,7 @@ final class FaceNSView: NSView {
 
     // MARK: Frame loop
 
-    override func viewDidMoveToWindow() {
+    public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateLink()
         update(force: true)
@@ -123,7 +123,7 @@ final class FaceNSView: NSView {
         ]
     }
 
-    override func draw(_ dirtyRect: NSRect) {
+    public override func draw(_ dirtyRect: NSRect) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         FaceRenderer.draw(in: cg, canvas: bounds.size, size: size, params: frame_.params,
                           gaze: frame_.gaze, t: frame_.t)

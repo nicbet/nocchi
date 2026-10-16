@@ -2,18 +2,18 @@ import CoreGraphics
 import NocchiCore
 
 /// Per-face animation state: mood transitions and gaze. Independent of how the face is drawn.
-struct FaceMotion {
-    static let transitionDuration = 0.35
+public struct FaceMotion: Sendable {
+    public static let transitionDuration = 0.35
 
-    private(set) var mood: Mood
+    public private(set) var mood: Mood
     private var previousMood: Mood?
     private var changedAt = 0.0
 
-    init(mood: Mood) {
+    public init(mood: Mood) {
         self.mood = mood
     }
 
-    mutating func setMood(_ new: Mood, at now: Double) {
+    public mutating func setMood(_ new: Mood, at now: Double) {
         guard new != mood else { return }
         previousMood = mood
         mood = new
@@ -21,7 +21,7 @@ struct FaceMotion {
     }
 
     /// Parameters at wall-clock `now` (for the transition) and animation time `t` (blinks, nods).
-    func params(at now: Double, motionTime t: Double, seed: Double, reduceMotion: Bool = false) -> FaceParams {
+    public func params(at now: Double, motionTime t: Double, seed: Double, reduceMotion: Bool = false) -> FaceParams {
         let target = FaceParams.make(mood, t: t, seed: seed, reduceMotion: reduceMotion)
         guard let previousMood else { return target }
         let progress = min(1, max(0, (now - changedAt) / Self.transitionDuration))
@@ -30,13 +30,13 @@ struct FaceMotion {
         return .lerp(FaceParams.make(previousMood, t: t, seed: seed, reduceMotion: reduceMotion), target, eased)
     }
 
-    func isTransitioning(at now: Double) -> Bool {
+    public func isTransitioning(at now: Double) -> Bool {
         previousMood != nil && now - changedAt < Self.transitionDuration
     }
 
     /// The mood's own gaze plus a pull toward `pointer` (both relative to the face center, y down).
     /// The pull is full strength from four face-widths away. Length is at most 1.
-    static func gaze(_ p: FaceParams, pointer: CGVector?, size: CGFloat) -> CGVector {
+    public static func gaze(_ p: FaceParams, pointer: CGVector?, size: CGFloat) -> CGVector {
         var g = p.gazeBias
         if p.gazeWeight > 0, let pointer {
             let d = max(1, hypot(pointer.dx, pointer.dy))

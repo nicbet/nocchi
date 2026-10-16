@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import AppKit
 import SwiftUI
 

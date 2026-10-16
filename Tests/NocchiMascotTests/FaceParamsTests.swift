@@ -1,7 +1,7 @@
 import CoreGraphics
 import NocchiCore
 import Testing
-@testable import NocchiUI
+@testable import NocchiMascot
 
 @Suite struct FaceParamsTests {
     @Test func blinkStaysInRangeAndIsMostlyOpen() {

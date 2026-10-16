@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Small helpers shared by the notch views.

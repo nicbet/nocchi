@@ -11,6 +11,13 @@ public struct ProcessTable: Sendable {
         public var tty: String?
         public var args: String
 
+        public init(pid: pid_t, ppid: pid_t, tty: String? = nil, args: String) {
+            self.pid = pid
+            self.ppid = ppid
+            self.tty = tty
+            self.args = args
+        }
+
         /// The executable's file name: "herdr", "claude", "codex", "node".
         public var command: String {
             let first = args.split(separator: " ").first.map(String.init) ?? args

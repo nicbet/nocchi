@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Expanded: a focus card for the primary agent (face + step carousel) and chips for the others.

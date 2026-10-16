@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Expanded, when the primary agent needs you, failed or just finished: one wide card with a glow

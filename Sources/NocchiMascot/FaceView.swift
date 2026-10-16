@@ -14,10 +14,10 @@ public struct FaceView: View {
     @Environment(\.nocchiReducesMotion) private var reduceMotion
 
     /// The canvas extends past the face so accessories aren't clipped.
-    static let canvasScale: CGFloat = 1.8
+    public static let canvasScale: CGFloat = 1.8
     /// Below this size a face is a colored blob: motion isn't visible, so it draws a still frame
     /// and only redraws when its mood changes.
-    static let minimumAnimatedSize: CGFloat = 14
+    public static let minimumAnimatedSize: CGFloat = 14
 
     public init(mood: Mood, size: CGFloat, seed: Double = 0) {
         self.mood = mood

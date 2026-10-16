@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Writing to an agent, or starting a new one with a message, across the whole expanded notch:

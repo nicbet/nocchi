@@ -1,4 +1,5 @@
 import Foundation
+import NocchiMascot
 import Observation
 import SwiftUI
 
@@ -95,11 +96,6 @@ public final class NocchiSettings {
         static let herdrSocketPath = "herdrSocketPath"
         static let recentChatFolders = "recentChatFolders"
     }
-}
-
-extension EnvironmentValues {
-    /// Whether nocchi reduces motion: the system setting, unless the user chose to ignore it.
-    @Entry var nocchiReducesMotion: Bool = false
 }
 
 /// Resolves `nocchiReducesMotion` from the system setting and `NocchiSettings`.

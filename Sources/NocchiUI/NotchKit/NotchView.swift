@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// The notch itself, drawn at the top center of the (larger, transparent) panel.

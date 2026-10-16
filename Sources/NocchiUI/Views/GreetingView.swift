@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// The greeting's choreography. Everything finishes before `duration`, when the notch collapses.

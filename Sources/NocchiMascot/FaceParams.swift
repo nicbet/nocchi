@@ -4,28 +4,40 @@ import NocchiCore
 
 /// Everything that describes a face at one instant. Lengths are fractions of the face diameter.
 /// Moods are just different parameter sets, so changing mood is a plain interpolation.
-struct FaceParams: Equatable {
-    var offset = CGVector.zero      // error shake
-    var rotation = 0.0              // radians, head tilt
-    var scale = 1.0                 // breathing
-    var body = FacePalette.body(for: .idle)  // color means state
+public struct FaceParams: Equatable, Sendable {
+    public var offset = CGVector.zero      // error shake
+    public var rotation = 0.0              // radians, head tilt
+    public var scale = 1.0                 // breathing
+    public var body = FacePalette.body(for: .idle)  // color means state
 
-    var eyeWidth = 0.095
-    var eyeHeight = 0.26
-    var eyeY = 0.02                 // eye center below the face center
-    var eyeSpacing = 0.25           // distance between eye centers
-    var caret = 0.0                 // 0 = capsule eyes, 1 = `^ ^` eyes
+    public var eyeWidth = 0.095
+    public var eyeHeight = 0.26
+    public var eyeY = 0.02                 // eye center below the face center
+    public var eyeSpacing = 0.25           // distance between eye centers
+    public var caret = 0.0                 // 0 = capsule eyes, 1 = `^ ^` eyes
 
-    var gazeBias = CGVector.zero    // where the eyes look on their own (-1…1)
-    var gazeWeight = 1.0            // how much the pointer pulls the eyes
+    public var gazeBias = CGVector.zero    // where the eyes look on their own (-1…1)
+    public var gazeWeight = 1.0            // how much the pointer pulls the eyes
 
-    var ring = 0.0                  // accessory opacities
-    var badge = 0.0
-    var sparkles = 0.0
-    var zzz = 0.0
-    var errorDot = 0.0
+    public var ring = 0.0                  // accessory opacities
+    public var badge = 0.0
+    public var sparkles = 0.0
+    public var zzz = 0.0
+    public var errorDot = 0.0
 
-    static func lerp(_ a: Self, _ b: Self, _ p: Double) -> Self {
+    public init(
+        offset: CGVector = .zero, rotation: Double = 0, scale: Double = 1, body: RGBA = FacePalette.body(for: .idle),
+        eyeWidth: Double = 0.095, eyeHeight: Double = 0.26, eyeY: Double = 0.02, eyeSpacing: Double = 0.25,
+        caret: Double = 0, gazeBias: CGVector = .zero, gazeWeight: Double = 1,
+        ring: Double = 0, badge: Double = 0, sparkles: Double = 0, zzz: Double = 0, errorDot: Double = 0
+    ) {
+        self.offset = offset; self.rotation = rotation; self.scale = scale; self.body = body
+        self.eyeWidth = eyeWidth; self.eyeHeight = eyeHeight; self.eyeY = eyeY; self.eyeSpacing = eyeSpacing
+        self.caret = caret; self.gazeBias = gazeBias; self.gazeWeight = gazeWeight
+        self.ring = ring; self.badge = badge; self.sparkles = sparkles; self.zzz = zzz; self.errorDot = errorDot
+    }
+
+    public static func lerp(_ a: Self, _ b: Self, _ p: Double) -> Self {
         // Weighted form so p == 0 and p == 1 return the endpoints exactly.
         func m(_ x: Double, _ y: Double) -> Double { x * (1 - p) + y * p }
         func v(_ x: CGVector, _ y: CGVector) -> CGVector { CGVector(dx: m(x.dx, y.dx), dy: m(x.dy, y.dy)) }
@@ -43,7 +55,7 @@ struct FaceParams: Equatable {
     /// Parameters for `mood` at time `t` (seconds). `seed` desynchronizes faces from each other.
     /// With `reduceMotion`, motion that moves the face (shake, sway, breathing) is
     /// removed; blinks, gaze, pulses and twinkles stay.
-    static func make(_ mood: Mood, t: Double, seed: Double, reduceMotion: Bool = false) -> Self {
+    public static func make(_ mood: Mood, t: Double, seed: Double, reduceMotion: Bool = false) -> Self {
         var p = makeAnimated(mood, t: t, seed: seed)
         if reduceMotion {
             let pose = makeAnimated(mood, t: 0, seed: 0)
@@ -119,7 +131,7 @@ struct FaceParams: Equatable {
 
     /// Eye openness multiplier: 1 when open, dips toward 0.08 during a blink.
     /// Each face blinks every 3.6–5.8 s, with an occasional double blink.
-    static func blink(_ t: Double, seed: Double) -> Double {
+    public static func blink(_ t: Double, seed: Double) -> Double {
         let fraction = seed - floor(seed)
         let period = 3.6 + fraction * 2.2
         let shifted = t + seed * 7.3

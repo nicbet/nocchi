@@ -6,6 +6,11 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .executable(name: "nocchi", targets: ["Nocchi"]),
+        .library(name: "NocchiCore", targets: ["NocchiCore"]),
+        .library(name: "NocchiTerminals", targets: ["NocchiTerminals"]),
+        .library(name: "NocchiClaude", targets: ["NocchiClaude"]),
+        .library(name: "NocchiHerdr", targets: ["NocchiHerdr"]),
+        .library(name: "NocchiMascot", targets: ["NocchiMascot"]),
     ],
     targets: [
         // App shell: lifecycle, notch panel, menu-bar item.
@@ -21,11 +26,14 @@ let package = Package(
         .target(name: "NocchiHerdr", dependencies: ["NocchiCore", "NocchiTerminals"]),
         // What Claude Code agents are doing, read from their session transcripts.
         .target(name: "NocchiClaude", dependencies: ["NocchiCore", "NocchiTerminals"]),
-        // NotchKit, Mascot and views.
-        .target(name: "NocchiUI", dependencies: ["NocchiCore"]),
+        // The face: one per Mood, drawn with Core Graphics, live or as a still frame.
+        .target(name: "NocchiMascot", dependencies: ["NocchiCore"]),
+        // NotchKit and views.
+        .target(name: "NocchiUI", dependencies: ["NocchiCore", "NocchiMascot"]),
 
         .testTarget(name: "NocchiCoreTests", dependencies: ["NocchiCore"]),
         .testTarget(name: "NocchiHerdrTests", dependencies: ["NocchiHerdr", "NocchiTerminals"]),
+        .testTarget(name: "NocchiMascotTests", dependencies: ["NocchiMascot"]),
         .testTarget(name: "NocchiUITests", dependencies: ["NocchiUI"]),
         .testTarget(name: "NocchiClaudeTests", dependencies: ["NocchiClaude"]),
         .testTarget(name: "NocchiTerminalsTests", dependencies: ["NocchiTerminals"]),

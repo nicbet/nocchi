@@ -1,4 +1,5 @@
 import NocchiCore
+import NocchiMascot
 import SwiftUI
 
 /// Collapsed: the primary agent's face on the left, a 2×2 cluster of the others on the right.
