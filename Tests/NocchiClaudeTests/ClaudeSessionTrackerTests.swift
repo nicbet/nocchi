@@ -41,7 +41,7 @@ import Testing
     }
 
     @Test func aTurnFromStartToFinish() {
-        let (tracker, events) = run(["idle", "busy", "shell", "busy", "idle"])
+        let (tracker, events) = run(["idle", "busy", "idle"])
         #expect(tracker.agents["s"]?.status == .done)
         #expect(tracker.agents["s"]?.kind == .claude)
         #expect(tracker.agents["s"]?.displayName == "app")
@@ -103,5 +103,19 @@ import Testing
         _ = tracker.applyRegistry([entry("idle")], context: elsewhere, titles: ["s": "Over SSH"], now: t0)
         #expect(tracker.agents["s"] != nil)
         #expect(tracker.agents["s"]?.host == nil)
+    }
+
+    /// Recorded with Claude Code 2.1.301: a turn that left `make dev` running in the background
+    /// ends in `shell`, not `idle`.
+    @Test func aBackgroundCommandDoesntKeepItWorking() {
+        let (finished, events) = run(["idle", "busy", "shell"])
+        #expect(finished.agents["s"]?.status == .done)
+        #expect(events.filter { $0 == .turnFinished(ref) }.count == 1)
+        let (stopped, _) = run(["idle", "busy", "shell", "idle"])
+        #expect(stopped.agents["s"]?.status == .done, "the command ending isn't news; still unseen")
+        let (answered, _) = run(["idle", "busy", "waiting", "shell"])
+        #expect(answered.agents["s"]?.status == .idle)
+        let (again, _) = run(["idle", "busy", "shell", "busy"])
+        #expect(again.agents["s"]?.status == .working, "a new turn")
     }
 }

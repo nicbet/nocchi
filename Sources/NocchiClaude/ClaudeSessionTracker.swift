@@ -3,10 +3,12 @@ import NocchiCore
 
 /// Claude Code sessions as `AgentEvent`s, from Claude's session registry (`~/.claude/sessions`,
 /// polled). Pure, so the lifecycle is covered by tests. Only status *changes* count:
-/// - `busy` or `shell` (running a command) → working;
+/// - `busy` → working (a foreground command keeps it `busy`);
 /// - `waiting` (a permission prompt or a question, see `waitingFor`) → blocked;
 /// - `idle` after work → done (a finished turn), until seen: its terminal comes to the front;
 /// - `idle` after waiting → idle (you answered or declined);
+/// - `shell` is `idle` with a background command still running (a dev server): the same, and
+///   `shell` ↔ `idle` (the command starting or ending) changes nothing;
 /// - gone from the registry → removed.
 /// Sessions inside a Herdr pane are left to the Herdr adapter when `leavesHerdrToHerdr` is set.
 public struct ClaudeSessionTracker: Sendable {
@@ -66,10 +68,14 @@ public struct ClaudeSessionTracker: Sendable {
     /// this version doesn't know).
     static func status(_ status: String?, after previous: String?) -> AgentStatus? {
         switch status {
-        case "busy", "shell": .working
+        case "busy": .working
         case "waiting": .blocked
-        case "idle" where previous == "busy" || previous == "shell": .done
-        case "idle" where previous != nil: .idle
+        case "idle", "shell":
+            switch previous {
+            case "busy": .done
+            case "waiting": .idle
+            default: nil  // first sighting, or a background command starting or ending
+            }
         default: nil
         }
     }
