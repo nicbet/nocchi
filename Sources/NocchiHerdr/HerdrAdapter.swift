@@ -1,5 +1,6 @@
 import Foundation
 import NocchiCore
+import NocchiTerminals
 import OSLog
 import Synchronization
 
@@ -29,6 +30,9 @@ public final class HerdrAdapter: AgentAdapter {
     /// Watch whether the terminal hosting Herdr is frontmost, so a turn that ends while it's
     /// behind other apps stays done until seen. Off in tests: plain Herdr behavior.
     public let watchesTerminal: Bool
+    /// Fill each agent's `host` (the terminal running Herdr's client, and its window hints),
+    /// looked up on every reconcile. Off by default: it runs `ps`, and nocchi doesn't need it.
+    public let locatesHost: Bool
 
     /// Last known status per pane, for refusing prompts to blocked agents.
     private let statuses = Mutex<[String: AgentStatus]>([:])
@@ -40,7 +44,8 @@ public final class HerdrAdapter: AgentAdapter {
     public init(
         client: HerdrClient, id: AdapterID = "herdr",
         capabilities: AdapterCapabilities = [.focus, .prompt, .start], timing: Timing = Timing(),
-        watchesTerminal: Bool = false, agentCommand: @escaping @Sendable (AgentKind) -> String = HerdrAdapter.command(for:)
+        watchesTerminal: Bool = false, locatesHost: Bool = false,
+        agentCommand: @escaping @Sendable (AgentKind) -> String = HerdrAdapter.command(for:)
     ) {
         self.client = client
         self.agentCommand = agentCommand
@@ -48,10 +53,11 @@ public final class HerdrAdapter: AgentAdapter {
         self.capabilities = capabilities
         self.timing = timing
         self.watchesTerminal = watchesTerminal
+        self.locatesHost = locatesHost
     }
 
-    public convenience init(socketPath: String = Herdr.socketPath(), watchesTerminal: Bool = false) {
-        self.init(client: HerdrClient(socketPath: socketPath), watchesTerminal: watchesTerminal)
+    public convenience init(socketPath: String = Herdr.socketPath(), watchesTerminal: Bool = false, locatesHost: Bool = false) {
+        self.init(client: HerdrClient(socketPath: socketPath), watchesTerminal: watchesTerminal, locatesHost: locatesHost)
     }
 
     // MARK: Events
@@ -164,6 +170,10 @@ public final class HerdrAdapter: AgentAdapter {
                 herdrLog.info("terminal frontmost: \(frontmost, privacy: .public)")
                 publish(tracker.setTerminalFrontmost(frontmost, now: Date()), tracker, to: out)
                 continue
+            }
+            if locatesHost {
+                let pid = await TerminalApps.preferred(HerdrTerminal.hostApps())?.processIdentifier
+                publish(tracker.setHost(pid), tracker, to: out)
             }
             var snapshot = try await client.snapshot()
             publish(tracker.apply(snapshot, now: Date()), tracker, to: out)

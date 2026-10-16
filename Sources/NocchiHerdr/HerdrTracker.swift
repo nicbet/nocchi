@@ -26,6 +26,8 @@ struct HerdrTracker {
     private var workspaceLabels: [String: String] = [:]
     private var paneWorkspaces: [String: String] = [:]
     private var paneTabs: [String: String] = [:]
+    /// The terminal app running the Herdr client, when looked up (see `setHost`).
+    private(set) var hostPID: Int32?
 
     init(adapter: AdapterID) { self.adapter = adapter }
 
@@ -52,6 +54,7 @@ struct HerdrTracker {
             var info = old ?? AgentInfo(ref: ref(pane.paneID), kind: .other("agent"), status: .starting, changedAt: now)
             info.isFocused = snapshot.focusedPaneID.map { $0 == pane.paneID } ?? pane.focused ?? false
             update(&info, from: pane, now: now)
+            info = withHost(info)
             if Self.finishesTurn(old?.status, info.status) { finished.append(.turnFinished(info.ref)) }
             next[pane.paneID] = info
         }
@@ -72,7 +75,7 @@ struct HerdrTracker {
             }
             var info = agents[pane]!
             update(&info, from: HerdrPane(paneID: pane, agent: agent, agentStatus: status, title: title), now: now)
-            out.events = commit(info)
+            out.events = commit(withHost(info))
 
         case .paneUpdated(let info):
             guard var agent = agents[info.paneID] else {
@@ -80,8 +83,9 @@ struct HerdrTracker {
                 break
             }
             if let tab = info.tabID { paneTabs[info.paneID] = tab }
+            if let workspace = info.workspaceID { paneWorkspaces[info.paneID] = workspace }
             update(&agent, from: info, now: now)
-            out.events = commit(agent)
+            out.events = commit(withHost(agent))
 
         case .paneCreated, .agentDetected:
             out.needsReconcile = true
@@ -104,10 +108,29 @@ struct HerdrTracker {
             for (pane, paneTab) in paneTabs.sorted(by: { $0.key < $1.key }) where paneTab == tab {
                 guard var info = agents[pane] else { continue }
                 info.name = Self.name(fromTab: label)
-                out.events += commit(info)
+                out.events += commit(withHost(info))
             }
         }
         return out
+    }
+
+    /// The terminal app running Herdr's client was found (nil: none, e.g. inside tmux or over
+    /// SSH). Every agent's `host` follows.
+    mutating func setHost(_ pid: Int32?) -> [AgentEvent] {
+        hostPID = pid
+        var events: [AgentEvent] = []
+        for info in agents.values.sorted(by: { $0.ref.localID < $1.ref.localID }) {
+            events += commit(withHost(info))
+        }
+        return events
+    }
+
+    /// `info` with its host brought up to date: Herdr's terminal, and the pane's window hints
+    /// (its title, tab or workspace may have just changed).
+    private func withHost(_ info: AgentInfo) -> AgentInfo {
+        var info = info
+        info.host = hostPID.map { AgentHost(pid: $0, windowHints: windowHints(for: info.ref.localID, title: info.title)) }
+        return info
     }
 
     /// The terminal running Herdr came to the front or went behind another app. Coming to the
@@ -196,9 +219,13 @@ struct HerdrTracker {
     /// What finds the agent's terminal window: Herdr titles it "host: workspace", so the workspace
     /// label first, then the tab and the agent's title.
     func windowHints(for pane: String) -> [String] {
+        windowHints(for: pane, title: agents[pane]?.title)
+    }
+
+    private func windowHints(for pane: String, title: String?) -> [String] {
         [paneWorkspaces[pane].flatMap { workspaceLabels[$0] },
          paneTabs[pane].flatMap { tabLabels[$0] },
-         agents[pane]?.title].compactMap { $0 }.filter { !$0.isEmpty }
+         title].compactMap { $0 }.filter { !$0.isEmpty }
     }
 
     static func name(fromTab label: String) -> String? {

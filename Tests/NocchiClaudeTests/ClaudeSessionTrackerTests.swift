@@ -85,4 +85,23 @@ import Testing
         _ = standalone.applyRegistry([entry("idle", pid: 6, id: "h")], context: here, now: t0)
         #expect(standalone.agents.count == 1)
     }
+
+    @Test func hostIsTheTerminalAndItsWindowHints() {
+        var tracker = ClaudeSessionTracker()
+        _ = tracker.applyRegistry([entry("idle")], context: here, now: t0)
+        #expect(tracker.agents["s"]?.host == AgentHost(pid: 7, windowHints: ["app"]), "the folder, before a title")
+
+        let events = tracker.applyRegistry([entry("idle")], context: here, titles: ["s": "Fix the login bug"], now: t0)
+        #expect(tracker.agents["s"]?.host == AgentHost(pid: 7, windowHints: ["Fix the login bug", "app"]))
+        #expect(events.count == 1, "a new title is news")
+        #expect(tracker.agents["s"]?.status == .idle)
+    }
+
+    @Test func noHostWhereTheTerminalIsUnknown() {
+        var tracker = ClaudeSessionTracker()
+        let elsewhere: [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)] = [5: (false, nil, nil)]
+        _ = tracker.applyRegistry([entry("idle")], context: elsewhere, titles: ["s": "Over SSH"], now: t0)
+        #expect(tracker.agents["s"] != nil)
+        #expect(tracker.agents["s"]?.host == nil)
+    }
 }

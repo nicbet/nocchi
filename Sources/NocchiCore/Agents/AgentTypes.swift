@@ -65,6 +65,20 @@ public enum AgentStatus: Hashable, Sendable {
     case error(String?)
 }
 
+/// Where an agent lives: the terminal app it runs in, and what finds its window there.
+public struct AgentHost: Hashable, Sendable {
+    /// The terminal app's process.
+    public var pid: pid_t
+    /// Window or tab titles to look for, most specific first: the same hints "open" raises by
+    /// (see `WindowRaiser.windowID(in:matching:)` in NocchiTerminals).
+    public var windowHints: [String]
+
+    public init(pid: pid_t, windowHints: [String]) {
+        self.pid = pid
+        self.windowHints = windowHints
+    }
+}
+
 /// Everything the UI needs to know about one agent.
 public struct AgentInfo: Hashable, Sendable {
     public var ref: AgentRef
@@ -80,10 +94,12 @@ public struct AgentInfo: Hashable, Sendable {
     public var isFocused: Bool
     /// When `status` last changed.
     public var changedAt: Date
+    /// The terminal it runs in; nil when unknown (inside tmux, over SSH, not looked up).
+    public var host: AgentHost?
 
     public init(
         ref: AgentRef, kind: AgentKind, status: AgentStatus, name: String? = nil, title: String? = nil,
-        cwd: URL? = nil, sessionID: String? = nil, isFocused: Bool = false, changedAt: Date
+        cwd: URL? = nil, sessionID: String? = nil, isFocused: Bool = false, changedAt: Date, host: AgentHost? = nil
     ) {
         self.ref = ref
         self.kind = kind
@@ -94,6 +110,7 @@ public struct AgentInfo: Hashable, Sendable {
         self.sessionID = sessionID
         self.isFocused = isFocused
         self.changedAt = changedAt
+        self.host = host
     }
 
     /// The name, else the working folder's name, else the agent kind.

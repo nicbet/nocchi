@@ -24,9 +24,11 @@ public struct ClaudeSessionTracker: Sendable {
     }
 
     /// One poll of the registry. `context` says, per pid, whether it runs inside Herdr and which
-    /// terminal app and tty host it (looked up by the caller; nil while unknown).
+    /// terminal app and tty host it (looked up by the caller; nil while unknown). `titles` has
+    /// each session's latest title, which Claude puts in its terminal's title (see `AgentHost`).
     public mutating func applyRegistry(
-        _ entries: [ClaudeRegistryEntry], context: [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)], now: Date
+        _ entries: [ClaudeRegistryEntry], context: [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)],
+        titles: [String: String] = [:], now: Date
     ) -> [AgentEvent] {
         var events: [AgentEvent] = []
         var live: Set<String> = []
@@ -43,6 +45,7 @@ public struct ClaudeSessionTracker: Sendable {
                 ref: AgentRef(adapter: adapter, localID: id), kind: .claude, status: .idle, sessionID: id, changedAt: now
             )
             if let cwd = entry.cwd, !cwd.isEmpty { info.cwd = URL(fileURLWithPath: cwd, isDirectory: true) }
+            info.host = hosts[id].map { AgentHost(pid: $0, windowHints: Self.windowHints(title: titles[id], cwd: info.cwd)) }
             let old = agents[id]?.status
             if entry.status != previous, let status = Self.status(entry.status, after: previous) {
                 if status != info.status { info.changedAt = now }
@@ -69,6 +72,12 @@ public struct ClaudeSessionTracker: Sendable {
         case "idle" where previous != nil: .idle
         default: nil
         }
+    }
+
+    /// What finds the session's window: Claude titles its terminal with the session's title; the
+    /// folder is the fallback.
+    static func windowHints(title: String?, cwd: URL?) -> [String] {
+        [title, cwd?.lastPathComponent].compactMap { $0 }.filter { !$0.isEmpty }
     }
 
     /// The terminal app `host` came to the front: its finished sessions are seen.

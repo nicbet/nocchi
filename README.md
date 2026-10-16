@@ -108,6 +108,12 @@ make live       # render the notch from your real Herdr
 `make snapshot` renders offscreen, so it needs no Screen Recording permission. The Debug menu has
 the mood gallery, a greeting replay and controls to keep the notch open.
 
+Other apps can use Nocchi's modules as library products (`NocchiCore`, `NocchiTerminals`,
+`NocchiClaude`, `NocchiHerdr`, `NocchiMascot`). `AgentInfo.host` says which terminal app an agent
+runs in and which titles find its window (`HerdrAdapter(locatesHost: true)` for Herdr agents), and
+`WindowRaiser.windowID(in:matching:)` (or `windowIDs` for several agents in one app) turns that
+into the window's `CGWindowID`, off the main thread and without raising it.
+
 The design, architecture and milestone history are in [PLAN.md](PLAN.md); open work is tracked
 with xpo.
 

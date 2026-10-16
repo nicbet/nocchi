@@ -229,4 +229,28 @@ import Testing
         _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "idle", title: nil), now: t1)
         #expect(status(tracker) == .idle)
     }
+
+    @Test func hostFollowsTheTerminalAndTheWindowHints() {
+        var tracker = HerdrTracker(adapter: "herdr")
+        let snapshot = HerdrSnapshot(
+            agents: [pane("w1:p1", title: "Fix the login bug", tab: "w1:t1")],
+            tabs: [.init(tabID: "w1:t1", label: "api")], workspaces: [.init(workspaceID: "w1", label: "nocchi")]
+        )
+        #expect(agents(tracker.apply(snapshot, now: t0)).map(\.host) == [nil], "not looked up yet")
+
+        let found = tracker.setHost(42)
+        #expect(found == [.upserted(tracker.agents["w1:p1"]!)])
+        #expect(tracker.agents["w1:p1"]?.host == AgentHost(pid: 42, windowHints: ["nocchi", "api", "Fix the login bug"]))
+
+        _ = tracker.apply(.tabRenamed(tab: "w1:t1", label: "backend"), now: t1)
+        _ = tracker.apply(.statusChanged(pane: "w1:p1", agent: "claude", status: "working", title: "Write tests"), now: t1)
+        #expect(tracker.agents["w1:p1"]?.host?.windowHints == ["nocchi", "backend", "Write tests"])
+
+        _ = tracker.apply(snapshot, now: t1)
+        #expect(tracker.agents["w1:p1"]?.host?.windowHints == ["nocchi", "api", "Fix the login bug"], "kept across snapshots")
+        #expect(tracker.setHost(42).isEmpty, "same host, no news")
+
+        _ = tracker.setHost(nil)
+        #expect(tracker.agents["w1:p1"]?.host == nil, "inside tmux or over SSH")
+    }
 }

@@ -46,9 +46,13 @@ public final class ClaudeAdapter: AgentAdapter {
     private func run(_ out: AsyncStream<AgentEvent>.Continuation) async {
         var tracker = ClaudeSessionTracker(adapter: id, leavesHerdrToHerdr: leavesHerdrToHerdr)
         var context = ProcessContext()
+        var titles = TitleCache()
         out.yield(.connection(.connected(version: nil)))
         let entries = ClaudeRegistryEntry.read(registry)
-        _ = tracker.applyRegistry(entries, context: await context.lookup(entries.map(\.pid)), now: Date())
+        _ = tracker.applyRegistry(
+            entries, context: await context.lookup(entries.map(\.pid)), titles: titles.lookup(entries.map(\.sessionID), now: Date()),
+            now: Date()
+        )
         out.yield(.snapshot(tracker.snapshot))
         publishHosts(tracker)
 
@@ -75,7 +79,10 @@ public final class ClaudeAdapter: AgentAdapter {
             switch signal {
             case .poll:
                 let entries = ClaudeRegistryEntry.read(registry)
-                events = tracker.applyRegistry(entries, context: await context.lookup(entries.map(\.pid)), now: now)
+                events = tracker.applyRegistry(
+                    entries, context: await context.lookup(entries.map(\.pid)), titles: titles.lookup(entries.map(\.sessionID), now: now),
+                    now: now
+                )
             case .frontmost(let pid):
                 events = tracker.hostBecameFrontmost(pid, now: now)
             }
@@ -117,6 +124,21 @@ public final class ClaudeAdapter: AgentAdapter {
             throw AgentActionError.unsupported(action)
         }
         return nil
+    }
+}
+
+/// Each session's latest title, for `AgentHost.windowHints`. Finding and tailing a transcript
+/// every poll would be wasteful, so a title is re-read at most every `maxAge`.
+private struct TitleCache {
+    var maxAge: TimeInterval = 5
+    private var known: [String: (title: String?, readAt: Date)] = [:]
+
+    mutating func lookup(_ sessions: [String], now: Date) -> [String: String] {
+        known = known.filter { sessions.contains($0.key) }
+        for session in sessions where known[session].map({ now.timeIntervalSince($0.readAt) >= maxAge }) ?? true {
+            known[session] = (ClaudeActivity.latestTitle(session: session), now)
+        }
+        return known.compactMapValues(\.title)
     }
 }
 
