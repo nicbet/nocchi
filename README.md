@@ -56,7 +56,7 @@ open /Applications/Nocchi.app
 Nocchi has no Dock icon; it lives in the notch and a menu-bar item. To start it with your Mac,
 turn on **Launch at Login** in that menu.
 
-The app is ad-hoc signed, not notarized. A copy you build yourself opens normally. If you copy the
+The app is self-signed, not notarized. A copy you build yourself opens normally. If you copy the
 app to another Mac, Gatekeeper blocks it the first time: right-click it and choose **Open**, or run
 `xattr -dr com.apple.quarantine /Applications/Nocchi.app`.
 
@@ -66,8 +66,10 @@ By default, opening an agent brings its terminal app to the front. To raise the 
 the agent runs in, choose **Open the Exact Window…** in the menu and grant Nocchi Accessibility
 access in System Settings ▸ Privacy & Security ▸ Accessibility.
 
-Because the app is ad-hoc signed, macOS treats every rebuild as a new app: after updating, remove
-Nocchi from that list and grant access again.
+Run `make signing-cert` once before building. It creates a local code-signing certificate,
+"Local App Signing", which every build is signed with, so macOS keeps the grant across rebuilds.
+Without it the app is signed ad hoc, and macOS treats every rebuild as a new app: after updating,
+run `make reset-permissions` and grant access again.
 
 ## Settings
 

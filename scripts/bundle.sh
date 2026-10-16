@@ -37,5 +37,13 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$app" >/dev/null
+# Sign with the stable local identity when it exists, so privacy grants survive rebuilds.
+# Otherwise sign ad hoc. Hints go to stderr: dev.sh reads the app path from the last line.
+identity="${SIGNING_IDENTITY:-Local App Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$identity\""; then
+    codesign --force --sign "$identity" "$app" >/dev/null 2>&1
+else
+    echo "Signing ad hoc: permissions reset on every rebuild. Run 'make signing-cert' once to fix that." >&2
+    codesign --force --sign - "$app" >/dev/null
+fi
 echo "$app"

@@ -4,10 +4,10 @@ CONFIG ?= debug
 APP    := build/Nocchi.app
 
 .DEFAULT_GOAL := help
-.PHONY: help build release test app run dev stop snapshot live icon clean
+.PHONY: help build release test app run dev stop snapshot live icon signing-cert reset-permissions clean
 
 help: ## Show this help
-	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Compile (CONFIG=debug|release, default debug)
 	swift build -c $(CONFIG)
@@ -39,6 +39,12 @@ live: build ## Render the notch from the real Herdr to build/snapshots/live-*.pn
 
 icon: ## Re-render Resources/AppIcon.icns from the icon design (AppIcon.swift)
 	scripts/make-icon.sh
+
+signing-cert: ## Create the local signing certificate so permissions survive rebuilds
+	scripts/create-signing-cert.sh
+
+reset-permissions: ## Reset Nocchi's Accessibility grant
+	tccutil reset Accessibility com.github.nicbet.nocchi
 
 clean: ## Remove build output
 	swift package clean
