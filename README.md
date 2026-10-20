@@ -51,13 +51,12 @@ Dev dependencies:
 ```sh
 git clone https://github.com/nicbet/nocchi.git
 cd nocchi
-make signing-cert                 # once: create a local code-signing certificate (see below)
-make release                      # builds build/Nocchi.app
-cp -R build/Nocchi.app /Applications/
-open /Applications/Nocchi.app
+make signing-cert   # 1. once: create your local signing certificate (see below)
+make install        # 2. build the release app and install it in /Applications
 ```
 
-Nocchi has no Dock icon; it lives in the notch and a menu-bar item. To start it with your Mac,
+Then open Nocchi from `/Applications`. `make release` builds `build/Nocchi.app` without installing
+it. Nocchi has no Dock icon; it lives in the notch and a menu-bar item. To start it with your Mac,
 turn on **Launch at Login** in that menu.
 
 ### Signing certificate

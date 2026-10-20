@@ -4,7 +4,7 @@ CONFIG ?= debug
 APP    := build/Nocchi.app
 
 .DEFAULT_GOAL := help
-.PHONY: help build release test app run dev stop snapshot live icon signing-cert reset-permissions clean
+.PHONY: help build release install test app run dev stop snapshot live icon signing-cert reset-permissions clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -14,6 +14,12 @@ build: ## Compile (CONFIG=debug|release, default debug)
 
 release: ## Build a release Nocchi.app
 	scripts/bundle.sh release
+
+install: release ## Build a release Nocchi.app and copy it to /Applications
+	-pkill -x nocchi
+	rm -rf /Applications/Nocchi.app
+	ditto $(APP) /Applications/Nocchi.app
+	@echo "Installed /Applications/Nocchi.app"
 
 test: ## Run all tests (Herdr integration tests run when herdr is installed)
 	swift test
