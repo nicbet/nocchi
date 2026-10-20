@@ -114,9 +114,14 @@ runs in and which titles find its window (`HerdrAdapter(locatesHost: true)` for 
 `WindowRaiser.windowID(in:matching:)` (or `windowIDs` for several agents in one app) turns that
 into the window's `CGWindowID`, off the main thread and without raising it.
 
-The design, architecture and milestone history are in [PLAN.md](PLAN.md); open work is tracked
-with xpo.
+Open work is tracked with xpo.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Trademarks
+
+Claude and Claude Code are trademarks or registered trademarks of Anthropic, PBC. OpenAI and Codex
+are trademarks or registered trademarks of OpenAI. Nocchi is an independent project and is not
+affiliated with, endorsed by or sponsored by Anthropic or OpenAI.
