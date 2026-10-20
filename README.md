@@ -34,20 +34,24 @@ needs you", "2 working · 1 needs you").
 ## Requirements
 
 - macOS 15 (Sequoia) or later. Works with or without a hardware notch.
-- Xcode 16 or the Swift 6 toolchain, to build it.
 - At least one agent source:
   - **Claude Code:** nothing to set up. Nocchi reads Claude's own list of running sessions
     (`~/.claude/sessions`) and their transcripts, so sessions in any terminal or IDE show up.
   - **[Herdr](https://herdr.dev) 0.9.1 or later:** for Codex and every other agent Herdr
     recognizes, and for writing to agents and starting them from the notch.
 
-## Install
+## Building it yourself
 
-There are no prebuilt downloads: build it from source.
+There are no prebuilt downloads: build it from source. You don't need an Apple Developer account.
+Dev dependencies:
+
+- Xcode 16 or the Swift 6 toolchain, for `swift` and `codesign`
+- Optional: [Herdr](https://herdr.dev), so `make test` also runs the Herdr integration tests
 
 ```sh
 git clone https://github.com/nicbet/nocchi.git
 cd nocchi
+make signing-cert                 # once: create a local code-signing certificate (see below)
 make release                      # builds build/Nocchi.app
 cp -R build/Nocchi.app /Applications/
 open /Applications/Nocchi.app
@@ -56,9 +60,33 @@ open /Applications/Nocchi.app
 Nocchi has no Dock icon; it lives in the notch and a menu-bar item. To start it with your Mac,
 turn on **Launch at Login** in that menu.
 
-The app is self-signed, not notarized. A copy you build yourself opens normally. If you copy the
-app to another Mac, Gatekeeper blocks it the first time: right-click it and choose **Open**, or run
-`xattr -dr com.apple.quarantine /Applications/Nocchi.app`.
+### Signing certificate
+
+Nocchi isn't signed with an Apple Developer ID. Without a certificate, the build signs it ad hoc,
+and an ad-hoc signature is different for every build. macOS ties the Accessibility permission to
+the signature, so after each rebuild Nocchi still shows as allowed in System Settings, but the
+permission no longer applies. A self-signed certificate gives every build the same identity, and
+the permission survives rebuilds.
+
+`make signing-cert` runs [`scripts/create-signing-cert.sh`](scripts/create-signing-cert.sh), which:
+
+1. creates a self-signed certificate named "Local App Signing" with `openssl`, valid for 10 years
+   and limited to code signing,
+2. imports it with its private key into your login keychain, and lets `codesign` use the key,
+3. trusts it for code signing only (macOS asks for your password).
+
+`make release`, `make app` and `make dev` (all through `scripts/bundle.sh`) check for the identity
+with `security find-identity -v -p codesigning` and sign with it when it is there; otherwise they
+sign ad hoc and say so. AI Bar and Cappucino use the same "Local App Signing" identity, so you only
+create it once. To use a different name, set `SIGNING_IDENTITY` for both, e.g.
+`SIGNING_IDENTITY="My Signing" make signing-cert release`. On the first signed build, macOS may
+ask whether `codesign` may use the key: click **Always Allow**. If you granted Accessibility to an
+ad-hoc build before, run `make reset-permissions` and grant it once more. To remove the
+certificate, delete "Local App Signing" (certificate and key) in Keychain Access.
+
+The app isn't notarized. A copy you build yourself opens normally. If you copy the app to another
+Mac, Gatekeeper blocks it the first time: click **Open Anyway** in System Settings → Privacy &
+Security, or run `xattr -dr com.apple.quarantine /Applications/Nocchi.app`.
 
 ### Optional: open the exact window
 
