@@ -25,7 +25,8 @@ building on John Bai's original "bot in the notch" idea. Go check out their work
   quiet.
 - **Click the primary face** to jump to that agent's terminal window or tab. When it's idle, click
   it to write a message to it instead (Herdr agents).
-- **Drop a folder on the notch** to start a new Claude agent there (Herdr).
+- **Drop a folder on the notch** to start a new Claude agent there (Herdr). In the Herdr app it
+  opens as a new tab in the folder's space, or in a new space named after the folder.
 - **A greeting** at launch: sparks, a wave hello, and a jump into the notch.
 
 On screens without a notch, Nocchi draws one, and its middle shows short status messages ("deploy
@@ -37,8 +38,11 @@ needs you", "2 working · 1 needs you").
 - At least one agent source:
   - **Claude Code:** nothing to set up. Nocchi reads Claude's own list of running sessions
     (`~/.claude/sessions`) and their transcripts, so sessions in any terminal or IDE show up.
-  - **[Herdr](https://herdr.dev) 0.9.1 or later:** for Codex and every other agent Herdr
-    recognizes, and for writing to agents and starting them from the notch.
+  - **The [Herdr](https://herdr.dev) app** (herdr-core `hc` 0.1.19 or later, with herdr-app):
+    for Codex and every other agent that reports its status to Herdr, and for writing to agents
+    and starting them from the notch. Starting agents needs the Herdr window open.
+  - **The Herdr TUI** (`herdr` 0.9.1 or later) still works as a separate source, off by default:
+    turn on Sources › Herdr (TUI).
 
 ## Building it yourself
 
@@ -46,7 +50,8 @@ There are no prebuilt downloads: build it from source. You don't need an Apple D
 Dev dependencies:
 
 - Xcode 16 or the Swift 6 toolchain, for `swift` and `codesign`
-- Optional: [Herdr](https://herdr.dev), so `make test` also runs the Herdr integration tests
+- Optional: [Herdr](https://herdr.dev) (`hc`, and `herdr` for the TUI), so `make test` also runs
+  the Herdr integration tests. They start their own throwaway Herdr, never touching yours.
 
 ```sh
 git clone https://github.com/nicbet/nocchi.git
@@ -107,12 +112,12 @@ All in the menu-bar item:
 | Peek | **Everything** (open for "needs you", banner for finished or failed), **Only When Needed**, or **Never** |
 | Play Sounds | A short sound when an agent needs you, failed or finished |
 | Show Status Text | Messages in the middle of a drawn notch (screens without a hardware notch) |
-| Sources | Herdr and Claude Code, each on or off |
+| Sources | Herdr (the app), Herdr (TUI) and Claude Code, each on or off. Claude sessions running in a Herdr that's on show up once, as Herdr's |
 | Screen | Which display shows the notch (Automatic picks the one with a notch) |
 | Ignore Reduce Motion | Keep the animations when Reduce Motion is on (if you use it only for faster Spaces) |
 | Launch at Login | Start Nocchi when you log in |
 
-To watch a named Herdr session or a socket somewhere else:
+Herdr TUI only: to watch a named session or a socket somewhere else:
 
 ```sh
 defaults write com.github.nicbet.nocchi herdrSession <name>
@@ -127,17 +132,18 @@ any.
 ```sh
 make            # list the tasks
 make dev        # rebuild a debug app and relaunch it
-make test       # all tests (Herdr integration tests run when herdr is installed)
+make test       # all tests (Herdr integration tests run when hc / herdr are installed)
 make snapshot   # render the notch in every state to build/snapshots/*.png
-make live       # render the notch from your real Herdr
+make live       # render the notch from your real Herdr app (SOURCE=herdr-tui or claude for others)
 ```
 
 `make snapshot` renders offscreen, so it needs no Screen Recording permission. The Debug menu has
 the mood gallery, a greeting replay and controls to keep the notch open.
 
 Other apps can use Nocchi's modules as library products (`NocchiCore`, `NocchiTerminals`,
-`NocchiClaude`, `NocchiHerdr`, `NocchiMascot`). `AgentInfo.host` says which terminal app an agent
-runs in and which titles find its window (`HerdrAdapter(locatesHost: true)` for Herdr agents), and
+`NocchiClaude`, `NocchiHerdr` for the TUI, `NocchiHerdrCore` for the Herdr app, `NocchiMascot`).
+`AgentInfo.host` says which terminal app an agent runs in and which titles find its window
+(`HerdrAdapter(locatesHost: true)` for Herdr TUI agents; Herdr app agents leave it empty), and
 `WindowRaiser.windowID(in:matching:)` (or `windowIDs` for several agents in one app) turns that
 into the window's `CGWindowID`, off the main thread and without raising it.
 
