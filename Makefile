@@ -40,8 +40,8 @@ stop: ## Quit a running nocchi
 snapshot: build ## Render the notch in each mode to build/snapshots/*.png
 	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots
 
-live: build ## Render the notch from the real Herdr to build/snapshots/live-*.png
-	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots --live
+live: build ## Render the notch from the real Herdr app (SOURCE=herdr-tui|claude for others) to build/snapshots/live-*.png
+	$$(swift build -c $(CONFIG) --show-bin-path)/nocchi --snapshot build/snapshots --live $(if $(SOURCE),--source $(SOURCE))
 
 icon: ## Re-render Resources/AppIcon.icns from the icon design (AppIcon.swift)
 	scripts/make-icon.sh

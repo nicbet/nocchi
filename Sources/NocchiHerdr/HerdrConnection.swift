@@ -7,7 +7,7 @@ import Synchronization
 /// Lines are split on raw bytes and only complete lines are decoded, so a multi-byte UTF-8
 /// character split across two reads stays intact. Calls block; `HerdrClient` runs them off the
 /// cooperative thread pool.
-final class HerdrConnection: Sendable {
+package final class HerdrConnection: Sendable {
     /// Snapshots of a busy session are large.
     static let maxLineLength = 16 << 20
 
@@ -17,7 +17,7 @@ final class HerdrConnection: Sendable {
     private let pending = Mutex(Data())
 
     /// Connects to `path`. With a `timeout`, reads and writes that take longer throw `.timeout`.
-    init(path: String, timeout: Duration?) throws {
+    package init(path: String, timeout: Duration?) throws {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let capacity = MemoryLayout.size(ofValue: address.sun_path)
@@ -51,21 +51,21 @@ final class HerdrConnection: Sendable {
     }
 
     /// Wraps an already connected socket (tests use a socket pair).
-    init(fileDescriptor fd: Int32) {
+    package init(fileDescriptor fd: Int32) {
         self.fd = fd
     }
 
     deinit { Darwin.close(fd) }
 
     /// Read and write timeout; `nil` waits forever.
-    func setTimeout(_ timeout: Duration?) {
+    package func setTimeout(_ timeout: Duration?) {
         let (seconds, attoseconds) = (timeout ?? .zero).components
         var value = timeval(tv_sec: Int(seconds), tv_usec: Int32(attoseconds / 1_000_000_000_000))
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &value, socklen_t(MemoryLayout<timeval>.size))
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &value, socklen_t(MemoryLayout<timeval>.size))
     }
 
-    func write(_ data: Data) throws {
+    package func write(_ data: Data) throws {
         try data.withUnsafeBytes { raw in
             var offset = 0
             while offset < raw.count {
@@ -80,7 +80,7 @@ final class HerdrConnection: Sendable {
     }
 
     /// The next line without its newline, or `nil` at end of stream.
-    func readLine() throws -> Data? {
+    package func readLine() throws -> Data? {
         try pending.withLock { buffer in
             var searchFrom = buffer.startIndex
             var chunk = [UInt8](repeating: 0, count: 64 * 1024)
@@ -112,7 +112,7 @@ final class HerdrConnection: Sendable {
 
     /// Wakes a blocked reader (it sees end of stream). The descriptor closes on deinit, once the
     /// reader has let go of the connection.
-    func close() {
+    package func close() {
         let first = isClosed.withLock { closed in
             defer { closed = true }
             return !closed

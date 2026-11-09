@@ -7,7 +7,8 @@ import Synchronization
 /// Claude Code sessions running outside Herdr (a plain terminal tab, an IDE's terminal), seen
 /// natively with no setup: Claude's own session registry (which sessions run, and whether they're
 /// busy, running a command, waiting for you or idle) and their transcripts (steps and messages,
-/// through `ClaudeActivityFeed`). Sessions inside Herdr panes are left to the Herdr adapter.
+/// through `ClaudeActivityFeed`). Sessions inside Herdr (the TUI's panes, or the Herdr app's
+/// herdr-core terminals) are left to that Herdr's adapter.
 public final class ClaudeAdapter: AgentAdapter {
     public let id: AdapterID = "claude"
     /// `.start` opens a terminal tab running `claude`; the registry then reports the session.
@@ -16,6 +17,7 @@ public final class ClaudeAdapter: AgentAdapter {
     private let registry: URL
     private let pollInterval: Duration
     private let leavesHerdrToHerdr: Bool
+    private let leavesHerdrCoreToHerdr: Bool
     /// Where each session's terminal is, for "open".
     private let hosts = Mutex<[String: pid_t]>([:])
     /// Per session: its folder name, a fallback for finding its window.
@@ -24,11 +26,13 @@ public final class ClaudeAdapter: AgentAdapter {
     public init(
         registry: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions"),
         pollInterval: Duration = .seconds(1),
-        leavesHerdrToHerdr: Bool = true
+        leavesHerdrToHerdr: Bool = true,
+        leavesHerdrCoreToHerdr: Bool = true
     ) {
         self.registry = registry
         self.pollInterval = pollInterval
         self.leavesHerdrToHerdr = leavesHerdrToHerdr
+        self.leavesHerdrCoreToHerdr = leavesHerdrCoreToHerdr
     }
 
     private enum Signal: Sendable {
@@ -44,8 +48,10 @@ public final class ClaudeAdapter: AgentAdapter {
     }
 
     private func run(_ out: AsyncStream<AgentEvent>.Continuation) async {
-        var tracker = ClaudeSessionTracker(adapter: id, leavesHerdrToHerdr: leavesHerdrToHerdr)
-        var context = ProcessContext()
+        var tracker = ClaudeSessionTracker(adapter: id, leavesHerdrToHerdr: leavesHerdrToHerdr || leavesHerdrCoreToHerdr)
+        var context = ProcessContext(leaving: Set(
+            [leavesHerdrToHerdr ? "herdr" : nil, leavesHerdrCoreToHerdr ? "herdr-core" : nil].compactMap { $0 }
+        ))
         var titles = TitleCache()
         out.yield(.connection(.connected(version: nil)))
         let entries = ClaudeRegistryEntry.read(registry)
@@ -142,9 +148,13 @@ private struct TitleCache {
     }
 }
 
-/// Where each `claude` process runs: inside Herdr or not, and its terminal app and tty. Looked
-/// up once per process (the process table is only read when a new one appears).
+/// Where each `claude` process runs: inside a Herdr that's a source or not, and its terminal app
+/// and tty. Looked up once per process (the process table is only read when a new one appears).
 private struct ProcessContext {
+    /// The Herdr processes whose sessions belong to Herdr's adapter: "herdr" (the TUI) and
+    /// "herdr-core" (the process holding the Herdr app's terminals).
+    let leaving: Set<String>
+    init(leaving: Set<String>) { self.leaving = leaving }
     private var known: [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)] = [:]
 
     mutating func lookup(_ pids: [Int32]) async -> [Int32: (insideHerdr: Bool, host: Int32?, tty: String?)] {
@@ -153,7 +163,7 @@ private struct ProcessContext {
             let table = await ProcessTable.current()
             for pid in missing {
                 let chain = [table[pid]].compactMap { $0 } + table.ancestors(of: pid)
-                let insideHerdr = chain.contains { $0.command == "herdr" }
+                let insideHerdr = chain.contains { leaving.contains($0.command) }
                 let host = await MainActor.run { TerminalApps.host(of: pid, in: table)?.processIdentifier }
                 known[pid] = (insideHerdr, host, table[pid]?.tty)
             }

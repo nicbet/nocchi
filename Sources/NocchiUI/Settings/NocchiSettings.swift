@@ -38,8 +38,12 @@ public final class NocchiSettings {
         didSet { defaults.set(screenName, forKey: Keys.screenName) }
     }
 
-    /// Agent sources. Herdr: agents in Herdr panes. Claude Code: Claude sessions anywhere else
-    /// (read from Claude's own session registry; no setup).
+    /// Agent sources. Herdr: agents in the Herdr app's terminals (herdr-core). Herdr (TUI): agents
+    /// in the older terminal Herdr's panes. Claude Code: Claude sessions anywhere else (read from
+    /// Claude's own session registry; no setup).
+    public var usesHerdrCore: Bool {
+        didSet { defaults.set(usesHerdrCore, forKey: Keys.usesHerdrCore) }
+    }
     public var usesHerdr: Bool {
         didSet { defaults.set(usesHerdr, forKey: Keys.usesHerdr) }
     }
@@ -76,7 +80,9 @@ public final class NocchiSettings {
         showsStatusText = defaults.object(forKey: Keys.showsStatusText) as? Bool ?? true
         playsSounds = defaults.bool(forKey: Keys.playsSounds)
         screenName = defaults.string(forKey: Keys.screenName)
-        usesHerdr = defaults.object(forKey: Keys.usesHerdr) as? Bool ?? true
+        usesHerdrCore = defaults.object(forKey: Keys.usesHerdrCore) as? Bool ?? true
+        // Off unless chosen: the Herdr app replaced the TUI.
+        usesHerdr = defaults.object(forKey: Keys.usesHerdr) as? Bool ?? false
         watchesClaude = defaults.object(forKey: Keys.watchesClaude) as? Bool ?? true
         herdrSession = defaults.string(forKey: Keys.herdrSession)
         herdrSocketPath = defaults.string(forKey: Keys.herdrSocketPath)
@@ -90,6 +96,7 @@ public final class NocchiSettings {
         static let showsStatusText = "showsStatusText"
         static let playsSounds = "playsSounds"
         static let screenName = "screenName"
+        static let usesHerdrCore = "usesHerdrCore"
         static let usesHerdr = "usesHerdr"
         static let watchesClaude = "watchesClaude"
         static let herdrSession = "herdrSession"

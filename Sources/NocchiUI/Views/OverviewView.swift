@@ -164,7 +164,8 @@ private struct SourceBadges: View {
 
     static func describe(_ id: AdapterID) -> (symbol: String, name: String) {
         switch id.rawValue {
-        case "herdr": ("square.split.2x1.fill", "Herdr")
+        case "hc": ("square.split.2x1.fill", "Herdr")
+        case "herdr": ("square.split.2x1", "Herdr (TUI)")
         case "claude": ("asterisk", "Claude Code")
         case "mock": ("theatermasks.fill", "Demo")
         default: ("circle.dashed", id.rawValue)

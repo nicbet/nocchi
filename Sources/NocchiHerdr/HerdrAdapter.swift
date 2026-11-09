@@ -342,7 +342,7 @@ public final class HerdrAdapter: AgentAdapter {
     }
 
     /// The new tab's name: the start of the message, cut at a word, else the agent's name.
-    static func tabLabel(_ prompt: String?, kind: AgentKind, limit: Int = 24) -> String {
+    public static func tabLabel(_ prompt: String?, kind: AgentKind, limit: Int = 24) -> String {
         let words = (prompt ?? "").split(whereSeparator: \.isWhitespace)
         guard !words.isEmpty else { return kind.displayName }
         var label = ""

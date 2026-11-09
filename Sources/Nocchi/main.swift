@@ -2,6 +2,7 @@ import AppKit
 import NocchiClaude
 import NocchiCore
 import NocchiHerdr
+import NocchiHerdrCore
 import NocchiUI
 
 // Dev tool: `nocchi --render-iconset <dir>` writes the app icon in every size (see make-icon.sh).
@@ -20,8 +21,9 @@ if let flag = CommandLine.arguments.firstIndex(of: "--render-iconset") {
 }
 
 // Dev tool: `nocchi --snapshot <dir>` renders the notch to PNGs and exits. With `--live` it
-// renders what the real Herdr reports instead of the preview scenarios; `--live --source claude`
-// renders what Claude's own session registry reports.
+// renders what the real Herdr app (herdr-core) reports instead of the preview scenarios;
+// `--live --source herdr-tui` what the terminal Herdr reports; `--live --source claude` what
+// Claude's own session registry reports.
 if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
     let dir = CommandLine.arguments.dropFirst(flag + 1).first ?? "."
     let live = CommandLine.arguments.contains("--live")
@@ -43,19 +45,25 @@ if let flag = CommandLine.arguments.firstIndex(of: "--snapshot") {
         let store = AgentStore()
         let settings = NocchiSettings.shared
         // `--source claude` sees Claude sessions natively (including Herdr's), to check the adapter.
+        let source: AdapterID
         if CommandLine.arguments.contains("claude") {
-            store.run(ClaudeAdapter(leavesHerdrToHerdr: false))
-        } else {
+            source = "claude"
+            store.run(ClaudeAdapter(leavesHerdrToHerdr: false, leavesHerdrCoreToHerdr: false))
+        } else if CommandLine.arguments.contains("herdr-tui") {
+            source = "herdr"
             store.run(HerdrAdapter(socketPath: Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)))
+        } else {
+            source = "hc"
+            store.run(HerdrCoreAdapter())
         }
         let activity = ClaudeActivityFeed(store: store)
         activity.start()
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
             activity.stop()
-            // `--select <pane>` renders that agent as the primary.
+            // `--select <agent>` (a terminal like t7, or a TUI pane) renders that agent as the primary.
             if let flag = CommandLine.arguments.firstIndex(of: "--select"), CommandLine.arguments.indices.contains(flag + 1) {
-                store.select(AgentRef(adapter: "herdr", localID: CommandLine.arguments[flag + 1]))
+                store.select(AgentRef(adapter: source, localID: CommandLine.arguments[flag + 1]))
             }
             for entry in store.state.agents.values.sorted(by: { $0.slot < $1.slot }) {
                 print("\(entry.ref) \(entry.info.kind.displayName) \(entry.info.status) \(store.mood(of: entry)) \"\(entry.info.displayName)\" \(entry.steps.last ?? "") | msg: \(entry.lastMessage ?? "-")\(entry.info.isFocused ? " [focused]" : "")")

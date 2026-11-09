@@ -2,6 +2,7 @@ import AppKit
 import NocchiClaude
 import NocchiCore
 import NocchiHerdr
+import NocchiHerdrCore
 import NocchiTerminals
 import NocchiUI
 import ServiceManagement
@@ -180,11 +181,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let demo { return "Demo: \(demo.name)" }
         let settings = NocchiSettings.shared
         var parts: [String] = []
-        if settings.usesHerdr {
-            switch store.state.connections["herdr"] {
+        if settings.usesHerdrCore {
+            switch store.state.connections["hc"] {
             case .connected(let version): parts.append("Herdr \(version ?? "")")
             case .unavailable(let reason): parts.append(reason)
             case .connecting, nil: parts.append("Connecting to Herdr…")
+            }
+        }
+        if settings.usesHerdr {
+            switch store.state.connections["herdr"] {
+            case .connected(let version): parts.append("Herdr TUI \(version ?? "")")
+            case .unavailable(let reason): parts.append(reason)
+            case .connecting, nil: parts.append("Connecting to Herdr TUI…")
             }
         }
         if settings.watchesClaude {
@@ -200,12 +208,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startSource() {
         let settings = NocchiSettings.shared
         if let demo {
+            store.stop("hc")
             store.stop("herdr")
             store.stop("claude")
             store.run(MockAdapter(scenario: demo))
             return
         }
         store.stop("mock")
+        if settings.usesHerdrCore {
+            if !store.isRunning("hc") { store.run(HerdrCoreAdapter()) }
+        } else {
+            store.stop("hc")
+        }
         if settings.usesHerdr {
             if !store.isRunning("herdr") {
                 let socket = Herdr.socketPath(override: settings.herdrSocketPath, session: settings.herdrSession)
@@ -214,17 +228,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             store.stop("herdr")
         }
-        // Sessions in Herdr panes are Herdr's while Herdr is a source; otherwise Claude shows them.
+        // Sessions in Herdr's terminals are Herdr's while that Herdr is a source; otherwise Claude
+        // shows them.
         store.stop("claude")
         if settings.watchesClaude {
-            store.run(ClaudeAdapter(leavesHerdrToHerdr: settings.usesHerdr))
+            store.run(ClaudeAdapter(leavesHerdrToHerdr: settings.usesHerdr, leavesHerdrCoreToHerdr: settings.usesHerdrCore))
         }
     }
 
     private func sourcesMenuItem() -> NSMenuItem {
         let menu = NSMenu()
         for (title, setting, tip) in [
-            ("Herdr", \NocchiSettings.usesHerdr, "Agents running in Herdr panes."),
+            ("Herdr", \NocchiSettings.usesHerdrCore, "Agents running in the Herdr app (herdr-core terminals)."),
+            ("Herdr (TUI)", \NocchiSettings.usesHerdr, "Agents running in the terminal Herdr's panes."),
             ("Claude Code", \NocchiSettings.watchesClaude, "Claude sessions anywhere else: a terminal tab, an IDE. Read from Claude's own session list; nothing to set up."),
         ] {
             let item = menu.addItem(withTitle: title, action: #selector(toggleSource(_:)), keyEquivalent: "")
